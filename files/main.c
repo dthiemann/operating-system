@@ -49,6 +49,7 @@ mbr_t myMBR;
 FILE *my_file;
 fat_t *fat;
 char *file_name = "FAT.bin";
+slist_t *open_files;
 
 /* Formats the FAT file system */
 void format(int16_t sector_size, int16_t cluster_size, uint16_t disk_size) {
@@ -253,8 +254,13 @@ int fs_open(char *absolute_path, char *mode) {
     FILE *my_file = fopen(absolute_path, mode);
     
     /* Need to work on this */
+    list_item_t new_open_file;
+    new_open_file.value = get_num_elements(open_files) + 1;
+    new_open_file.the_file = my_file;
     
-    return 0;
+    add(open_files, &new_open_file);
+    
+    return return new_open_file.value;
 }
 
 int fs_close(int fh) {

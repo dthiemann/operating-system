@@ -31,9 +31,7 @@ int get_num_elements(slist_t *list) {
 }
 
 // Adds an element to a current list, *list, wtih value, *string
-void add(slist_t *list, char *string) {
-	list_item_t *newItem = (list_item_t *)malloc(sizeof(list_item_t));
-	newItem->value = string;
+void add(slist_t *list, list_item_t *list_item) {
 
 	list_item_t *last = list->tail;
 	// The list is empty
@@ -79,11 +77,11 @@ void print(slist_t *list) {
 	currentLink = list->head;
 	// Traverse list by assigning currentLink it's "next" element untill we reach NULL
 	while (currentLink->next != NULL) {
-		printf("%s\n", currentLink->value);
+		printf("%d\n", currentLink->value);
 		currentLink = currentLink->next;
 	}
 
-	printf("%s\n", currentLink->value);
+	printf("%d\n", currentLink->value);
 }
 
 // Sorts entire nodes by pointer adjustment
@@ -104,7 +102,7 @@ void bubblesort(slist_t *list) {
 			}
 
 			// If x > y, swap them
-			if (strcmp(currentLink->value, currentLink->next->value) > 0) {
+			if (currentLink->value > currentLink->next->value) {
 			//if (currentLink->value[0] > currentLink->next->value[0]) {
 
 				// Temp variable for the node we are swapping with currentLink
@@ -120,8 +118,6 @@ void bubblesort(slist_t *list) {
 
 					currentLink->next = NULL;
 					nextOne->prev = NULL;
-
-
 				} 
 				// If we are at the head element
 				else if (currentLink->prev == NULL) {
@@ -170,5 +166,4 @@ void bubblesort(slist_t *list) {
 		currentLink = list->head;
 		N--;
 	}
-
 }
