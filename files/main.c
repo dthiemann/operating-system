@@ -35,6 +35,7 @@ int get_current_date();
 int get_available_cluster_in_bytes(uint16_t fat_len);
 entry_t get_entry_from_cluster(uint16_t cluster);
 int find_open_child_slot_for_cluster(int directory_handler);
+uint16_t clusterToBytes(mbr_t *myMBR, uint16_t address);
 
 mbr_t * getMBR();
 fat_t * getFAT();
@@ -189,13 +190,32 @@ int fs_opendir(char *absolute_path) {
 }
 
 void fs_mkdir(int dh, char *child_name) {
+    mbr_t *mbr = getMBR();
+    
+    FILE *my_file = fopen(file_name, "wb+");
+    
     int child_location = find_open_child_slot_for_cluster(dh);
     int child_cluster_local = get_available_cluster_in_bytes();
+    
+    /* Updated number of children for parent directory */
+    entry_t parent_entry = get_entry_from_cluster(dh);
+    parent_entry.numChildren = parent_entry.numChildren + 1;
+    fseek(my_file, clusterToBytes(mbr, dh), SEEK_SET);
+    /* Write updated parent dir to file */
+    fwrite(&parent_entry, sizeof(entry_t), 1, my_file);
     
     /* Create the new directory */
     entry_t new_dir;
     strncpy(new_dir.name, child_name, sizeof(child_name));
     stringArray[sizeof(stringArray) - 1] = '\0';
+    
+    new_dir.entry_type = 1;     /* Directory */
+    new_dir.creation_date = get_current_date();
+    new_dir.creation_time = get_current_time();
+    new_dir.size = 0;
+    new_dir.numChildren = 0;
+    
+    
 }
 
 entry_t *fs_ls(int dh, void *prev) {
@@ -288,7 +308,7 @@ fat_t * getFAT() {
     fat_t *myFat;
     
     fread(&myFat, myMBR->fat_len * myMBR->cluster_sz * myMBR->sector_sz, 1, my_file);
-    
+    fclose(my_file);
     return myFat;
 }
 
@@ -299,6 +319,7 @@ mbr_t * getMBR() {
     
     fread(&myMBR, sizeof(mbr_t), 1, my_file);
     
+    fclose(my_file);
     return myMBR;
 }
 
