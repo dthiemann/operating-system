@@ -242,6 +242,23 @@ uint16_t clusterToBytes(mbr_t *myMBR, uint16_t address) {
 
 /* Get an entry from a cluster number */
 entry_t get_entry_from_cluster(uint16_t cluster) {
+    FILE *f = fopen(file_name, "r");
+    mbr_t *myMBR = getMBR();
+    fat_t *myFAT = getFAT();
+    
+    /* Nothing exists at that cluster */
+    if (myFAT[cluster] == 0xFFFF) { return NULL; }
+    
+    /* Find where the data starts */
+    uint16_t cluster_size_in_bytes = myMBR.cluster_size * myMBR.sector_sz;
+    uint16_t data_start_in_bytes = myMBR.data_start * cluster_size_in_bytes;
+    uint16_t cluster_start = data_start_in_bytes + cluster_size_in_bytes * cluster;
+    
+    entry_t my_entry;
+    fseek(f, cluster_start, 0);
+    fread(my_entry, sizeof(entry_t), 1, f);
+    
+    return my_entry;
     
 }
 
