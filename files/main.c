@@ -232,8 +232,18 @@ void fs_mkdir(int dh, char *child_name) {
     fclose(my_file);
 }
 
+/**
+ prev - represents the # of child to get
+ */
 entry_t *fs_ls(int dh, void *prev) {
-    return NULL;
+    int *child = (int *)prev;
+    entry_ptr_t child_data = get_children_data_from_cluster(dh, *child);
+    
+    if (child_data == NULL) { return NULL; }
+    
+    entry_t entry = get_entry_from_cluster(child_data.start);
+    
+    return entry;
 }
 
 /* File operations */
