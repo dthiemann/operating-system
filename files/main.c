@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -33,6 +34,9 @@ int get_current_time();
 int get_current_date();
 int get_available_cluster_in_bytes(uint16_t fat_len);
 entry_t get_entry_from_cluster(uint16_t cluster);
+
+mbr_t * getMBR();
+fat_t * getFAT();
 
 /**********************************************/
 
@@ -118,17 +122,34 @@ void format(int16_t sector_size, int16_t cluster_size, uint16_t disk_size) {
 /* Returns the cluster number of where the directory starts */
 int fs_opendir(char *absolute_path) {
     struct stat s;
-    int err = stat("/path/to/possible_dir", &s);
+    int err = stat(absolute_path, &s);
     
     /* Path exists */
     if (err != -1) {
+        int path_index = 0;
+        char *part = strok(absolute_path, "/");
+        while (part != NULL) {
+            part = strok(NULL, "/");
+            path_index = path_index + 1;
+        }
+        
         int num = 0;
+        int count = 0;
         fat_t *myFAT = getFAT();
         
+        part = strok(absolute_path, "/");
         /* Iterate through FAT until empty or found */
-        uint16_t cluster_num = myFAT[num];
-        while (cluster_num != 0xFFFF) {
-            entry_t temp_entry = get_entry_from_cluster(num);
+        uint16_t cluster_num = myFAT[num].state;
+        while (count < path_index || cluster_num == 0xFFFF) {
+            entry_t temp_entry = get_entry_from_cluster();
+            
+            /* Found a match! */
+            if (strcmp(part, temp_entry.name) == 0) {
+                int child = 0;
+                while (child < temp_entry.numChildren) {
+                    
+                }
+            }
             /**
              Need to figure out how to 
              iterate through children
@@ -142,6 +163,7 @@ int fs_opendir(char *absolute_path) {
     else {
         printf("Path: %s does not exist", absolute_path);
     }
+    return -1;
 }
 
 void fs_mkdir(int dh, char *child_name) {
@@ -162,6 +184,7 @@ int fs_close(int fh) {
 }
 
 int fs_write(const void *buffer, int count, int stream) {
+    //fwrite();
     return 0;
 }
 
@@ -262,19 +285,41 @@ entry_t get_entry_from_cluster(uint16_t cluster) {
     mbr_t *myMBR = getMBR();
     fat_t *myFAT = getFAT();
     
+    entry_t my_entry;
     /* Nothing exists at that cluster */
-    if (myFAT[cluster] == 0xFFFF) { return NULL; }
+    if (myFAT[cluster].state == 0xFFFF) { return my_entry; }
     
     /* Find where the data starts */
-    uint16_t cluster_size_in_bytes = myMBR.cluster_size * myMBR.sector_sz;
-    uint16_t data_start_in_bytes = myMBR.data_start * cluster_size_in_bytes;
+    uint16_t cluster_size_in_bytes = myMBR->cluster_sz * myMBR->sector_sz;
+    uint16_t data_start_in_bytes = myMBR->data_start * cluster_size_in_bytes;
     uint16_t cluster_start = data_start_in_bytes + cluster_size_in_bytes * cluster;
-    
-    entry_t my_entry;
+
     fseek(f, cluster_start, 0);
-    fread(my_entry, sizeof(entry_t), 1, f);
+    fread(&my_entry, sizeof(entry_t), 1, f);
     
     return my_entry;
+    
+}
+
+/* Get a specific child of a directory */
+entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child) {
+    FILE *f = fopen(file_name, "r");
+    mbr_t *myMBR = getMBR();
+    fat_t *myFAT = getFAT();
+    
+    entry_ptr_t my_child;
+    /* Nothing exists at that cluster */
+    if (myFAT[cluster].state == 0xFFFF) { return my_entry; }
+    
+    /* Find where the data starts */
+    uint16_t cluster_size_in_bytes = myMBR->cluster_sz * myMBR->sector_sz;
+    uint16_t data_start_in_bytes = myMBR->data_start * cluster_size_in_bytes;
+    uint16_t cluster_start = data_start_in_bytes + cluster_size_in_bytes * cluster;
+    
+    fseek(f, cluster_start + sizeof(entry_ptr_t)*num_child, 0);
+    fread(&my_child, sizeof(entry_ptr_t), 1, f);
+    
+    return my_child;
     
 }
 
@@ -351,9 +396,16 @@ int main(int argc, const char * argv[]) {
     // insert code here...
     //printf("%d\n", 3/2);
     
-    format(64, 1, 2000);
+    //format(64, 1, 2000);
     
-    printf("%s\n", myMBR.disk_name);
+    //printf("%s\n", myMBR.disk_name);
     
+    char str[] = "path/to/directory";
+    char *part = strtok(str, "/");
+    while (part != NULL) {
+        printf("%s \n", part);
+        part = strtok(NULL, "/");
+    }
+
     return 0;
 }
