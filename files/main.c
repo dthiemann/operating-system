@@ -146,8 +146,14 @@ int fs_opendir(char *absolute_path) {
             /* Found a match! */
             if (strcmp(part, temp_entry.name) == 0) {
                 int child = 0;
+                part = strok(NULL, "/");
+                /* Search the children */
                 while (child < temp_entry.numChildren) {
-                    
+                    entry_ptr_t child = get_children_data_from_cluster(cluster_num, child);
+                    entry_t temp_temp_entry = get_entry_from_cluster(child.start);
+                    if (strcmp(temp_temp_entry.name, part) == 0) {
+                        count = count + 1;
+                    }
                 }
             }
             /**
