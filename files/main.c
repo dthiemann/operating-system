@@ -33,6 +33,7 @@
 int get_current_time();
 int get_current_date();
 int get_available_cluster_in_bytes(uint16_t fat_len);
+int get_available_cluster(uint16_t fat_len);
 entry_t get_entry_from_cluster(uint16_t cluster);
 int find_open_child_slot_for_cluster(int directory_handler);
 uint16_t clusterToBytes(mbr_t *myMBR, uint16_t address);
@@ -195,7 +196,8 @@ void fs_mkdir(int dh, char *child_name) {
     FILE *my_file = fopen(file_name, "wb+");
     
     int child_location = find_open_child_slot_for_cluster(dh);
-    int child_cluster_local = get_available_cluster_in_bytes();
+    int child_cluster_local = get_available_cluster_in_bytes(mbr->fat_len);
+    int child_cluster = get_available_cluster(mbr->fat_len);
     
     /* Updated number of children for parent directory */
     entry_t parent_entry = get_entry_from_cluster(dh);
@@ -215,7 +217,19 @@ void fs_mkdir(int dh, char *child_name) {
     new_dir.size = 0;
     new_dir.numChildren = 0;
     
+    fseek(my_file, child_cluster_local, SEEK_SET);
+    fwrite(new_dir, sizeof(entry_t), 1, my_file);
     
+    /* Create a pointer */
+    entry_ptr_t new_pointer;
+    new_pointer.type = 1;
+    new_pointer.start = child_cluster;
+    
+    fseek(my_file, child_location, SEEK_SET);
+    fwrite(new_pointer, sizeof(entry_ptr_t), 1, my_file);
+    
+    /* Close file */
+    fclose(my_file);
 }
 
 entry_t *fs_ls(int dh, void *prev) {
@@ -255,8 +269,14 @@ int fs_rm() {
 }
 
 /**********************************************/
+/**********************************************/
+/**********************************************/
 
 /* Helper Functions */
+
+/**********************************************/
+/**********************************************/
+/**********************************************/
 
 /* Returns current date in a 16 bit integer */
 int get_current_date() {
@@ -287,7 +307,7 @@ int get_current_time() {
 }
 
 /* Finds the next available cluster to write data to */
-int get_available_cluster_in_bytes(uint16_t fat_len) {
+int get_available_cluster(uint16_t fat_len) {
     for (int i = 0; i < fat_len; i++) {
         if (fat[i].state == 0xFFFF) {
             return i;
@@ -295,6 +315,20 @@ int get_available_cluster_in_bytes(uint16_t fat_len) {
     }
     /* if disk is full */
     return fat_len;
+}
+
+/* Finds the next available cluster to write data to */
+int get_available_cluster_in_bytes(uint16_t fat_len) {
+    mbr_t *mbr = getMBR();
+    uint16_t clust_sz_bytes = mbr->cluster_sz * mbr->sector_sz;
+    
+    for (int i = 0; i < fat_len; i++) {
+        if (fat[i].state == 0xFFFF) {
+            return i * clust_sz_bytes;
+        }
+    }
+    /* if disk is full */
+    return fat_len * clust_sz_bytes;
 }
 
 /* get FAT from disk */
@@ -399,9 +433,11 @@ int find_open_child_slot_for_cluster(int directory_handler) {
     }
     
     return -1;
-    
-    return 0;
 }
+
+/**********************************************/
+/**********************************************/
+/**********************************************/
 
 /* Prints contents of disk */
 void print_disk() {
