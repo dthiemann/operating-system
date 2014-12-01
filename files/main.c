@@ -37,6 +37,7 @@ int get_available_cluster(uint16_t fat_len);
 entry_t get_entry_from_cluster(uint16_t cluster);
 int find_open_child_slot_for_cluster(int directory_handler);
 uint16_t clusterToBytes(mbr_t *myMBR, uint16_t address);
+entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child);
 
 mbr_t * getMBR();
 fat_t * getFAT();
@@ -130,10 +131,10 @@ int fs_opendir(char *absolute_path) {
     /* Path exists */
     if (err != -1) {
         int path_index = 0;
-        char *part = strok(absolute_path, "/");
+        char *part = strtok(absolute_path, "/");
         /* How many directories will we traverse */
         while (part != NULL) {
-            part = strok(NULL, "/");
+            part = strtok(NULL, "/");
             path_index = path_index + 1;
         }
         
@@ -141,7 +142,7 @@ int fs_opendir(char *absolute_path) {
         int count = 0;      /* for path */
         fat_t *myFAT = getFAT();
         
-        part = strok(absolute_path, "/");
+        part = strtok(absolute_path, "/");
         /* Iterate through FAT until empty or found */
         uint16_t cluster_num = myFAT[num].state;
         while (count < path_index) {
@@ -149,15 +150,15 @@ int fs_opendir(char *absolute_path) {
             
             /* Find directory */
             if (strcmp(part, temp_entry.name) == 0) {
-                int child = 0;
-                part = strok(NULL, "/");
+                int child_num = 0;
+                part = strtok(NULL, "/");
                 
                 /* Found the child */
                 if (part == NULL) { return cluster_num; }
                 
                 /* Search the children */
-                while (child < temp_entry.numChildren) {
-                    entry_ptr_t child = get_children_data_from_cluster(cluster_num, child);
+                while (child_num < temp_entry.numChildren) {
+                    entry_ptr_t child = get_children_data_from_cluster(cluster_num, child_num);
                     entry_t temp_temp_entry = get_entry_from_cluster(child.start);
                     
                     /* Found a matching child */
@@ -167,7 +168,7 @@ int fs_opendir(char *absolute_path) {
                         break;
                     }
                     
-                    child++;
+                    child_num++;
                 }
                 /* Update count variable for path directories */
                 count++;
@@ -208,8 +209,8 @@ void fs_mkdir(int dh, char *child_name) {
     
     /* Create the new directory */
     entry_t new_dir;
-    strncpy(new_dir.name, child_name, sizeof(child_name));
-    stringArray[sizeof(stringArray) - 1] = '\0';
+    strncpy(new_dir.name, child_name, sizeof(new_dir.name));
+    new_dir.name[sizeof(new_dir.name) - 1] = '\0';
     
     new_dir.entry_type = 1;     /* Directory */
     new_dir.creation_date = get_current_date();
@@ -218,7 +219,7 @@ void fs_mkdir(int dh, char *child_name) {
     new_dir.numChildren = 0;
     
     fseek(my_file, child_cluster_local, SEEK_SET);
-    fwrite(new_dir, sizeof(entry_t), 1, my_file);
+    fwrite(&new_dir, sizeof(entry_t), 1, my_file);
     
     /* Create a pointer */
     entry_ptr_t new_pointer;
@@ -226,7 +227,7 @@ void fs_mkdir(int dh, char *child_name) {
     new_pointer.start = child_cluster;
     
     fseek(my_file, child_location, SEEK_SET);
-    fwrite(new_pointer, sizeof(entry_ptr_t), 1, my_file);
+    fwrite(&new_pointer, sizeof(entry_ptr_t), 1, my_file);
     
     /* Close file */
     fclose(my_file);
@@ -239,15 +240,20 @@ entry_t *fs_ls(int dh, void *prev) {
     int *child = (int *)prev;
     entry_ptr_t child_data = get_children_data_from_cluster(dh, *child);
     
-    if (child_data == NULL) { return NULL; }
+    if (&child_data == NULL) { return NULL; }
     
     entry_t entry = get_entry_from_cluster(child_data.start);
+    entry_t *entry_2 = &entry;
     
-    return entry;
+    return entry_2;
 }
 
 /* File operations */
 int fs_open(char *absolute_path, char *mode) {
+    FILE *my_file = fopen(absolute_path, mode);
+    
+    /* Need to work on this */
+    
     return 0;
 }
 
@@ -403,7 +409,7 @@ entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child) {
     
     entry_ptr_t my_child;
     /* Nothing exists at that cluster */
-    if (myFAT[cluster].state == 0xFFFF) { return my_entry; }
+    if (myFAT[cluster].state == 0xFFFF) { return my_child; }
     
     /* Find where the data starts */
     uint16_t cluster_size_in_bytes = myMBR->cluster_sz * myMBR->sector_sz;
@@ -424,7 +430,7 @@ int find_open_child_slot_for_cluster(int directory_handler) {
     uint16_t cluster_size_in_bytes = mbr->cluster_sz * mbr->sector_sz;
     
     /* Dir location in bytes */
-    uint16_t dir_local = clusterToBytes(directory_handler);
+    uint16_t dir_local = clusterToBytes(mbr, directory_handler);
     
     /* move to first child slot */
     fseek(my_file, dir_local + sizeof(entry_t), SEEK_SET);
@@ -434,7 +440,7 @@ int find_open_child_slot_for_cluster(int directory_handler) {
     while (current_seek < cluster_size_in_bytes) {
         entry_ptr_t temp = get_children_data_from_cluster(directory_handler, child_count);
         
-        if (temp == NULL) {
+        if (&temp == NULL) {
             return dir_local + current_seek;
         } else {
             current_seek = current_seek + sizeof(entry_ptr_t);
