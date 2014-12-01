@@ -32,6 +32,7 @@
 int get_current_time();
 int get_current_date();
 int get_available_cluster_in_bytes(uint16_t fat_len);
+entry_t get_entry_from_cluster(uint16_t cluster);
 
 /**********************************************/
 
@@ -114,13 +115,28 @@ void format(int16_t sector_size, int16_t cluster_size, uint16_t disk_size) {
     fclose(my_file);
 }
 
-void fs_opendir(char *absolute_path) {
+/* Returns the cluster number of where the directory starts */
+int fs_opendir(char *absolute_path) {
     struct stat s;
     int err = stat("/path/to/possible_dir", &s);
     
     /* Path exists */
     if (err != -1) {
+        int num = 0;
+        fat_t *myFAT = getFAT();
         
+        /* Iterate through FAT until empty or found */
+        uint16_t cluster_num = myFAT[num];
+        while (cluster_num != 0xFFFF) {
+            entry_t temp_entry = get_entry_from_cluster(num);
+            /**
+             Need to figure out how to 
+             iterate through children
+             */
+        }
+        
+        /* No match was found */
+        return -1;
     }
     /* Path doesn't exist */
     else {
