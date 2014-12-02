@@ -59,6 +59,7 @@ typedef struct __attribute__ ((__packed__)) {
 typedef struct list_item {
     int value;
     FILE *the_file;
+    char *mode;
 	struct list_item *next;
 	struct list_item *prev;
 } list_item_t; 

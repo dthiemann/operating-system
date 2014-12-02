@@ -251,15 +251,28 @@ entry_t *fs_ls(int dh, void *prev) {
 
 /* File operations */
 int fs_open(char *absolute_path, char *mode) {
+    
+    bool is_present = false;
+    
+    /* Check if the file exists */
+    if (access( absolute_path, F_OK ) != -1) { is_present = true; }
+    
+    
     FILE *my_file = fopen(absolute_path, mode);
     
     /* Need to work on this */
     list_item_t new_open_file;
     new_open_file.value = get_num_elements(open_files) + 1;
     new_open_file.the_file = my_file;
+    new_open_file.mode = mode;
     
     /* Add file to open files data structures */
     add(open_files, &new_open_file);
+    
+    /* Add file to a cluster */
+    if (is_present == false) {
+        
+    }
     
     return new_open_file.value;
 }
@@ -271,13 +284,41 @@ int fs_close(int fh) {
     return 0;
 }
 
+/**
+ Writes an item to a file
+ 
+ Returns 1 for success and -1 for failure
+ */
 int fs_write(const void *buffer, int count, int stream) {
-    //fwrite();
-    return 0;
+    
+    list_item_t *my_item = get_list_item_with_handler(open_files, stream);
+    
+    /* File is in the wrong mode */
+    if (strcmp(my_item->mode, "r") == 0) { return -1; }
+    
+    FILE *my_file = my_item->the_file;
+    fwrite(buffer, count, 1, my_file);
+    
+    /* Success */
+    return 1;
 }
 
+/**
+ Reads an item from a file
+ 
+ Returns 1 for sucess and -1 for failure
+ */
 int fs_read(const void *buffer, int count, int stream) {
-    return 0;
+    
+    list_item_t *my_item = get_list_item_with_handler(open_files, stream);
+    
+    /* File in wrong mode */
+    if (strcmp(my_item->mode, "w") == 0) { return -1; }
+    
+    FILE *my_file = my_item->the_file;
+    fread(buffer, count, 1, my_file);
+    
+    return 1;
 }
 
 
