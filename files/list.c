@@ -10,6 +10,7 @@
 
 // Creates a new slist_t structure with a given character string
 void init(slist_t *list) {
+    list = malloc(sizeof(slist_t));
 	list->head = NULL;
 	list->tail = NULL;
 }
@@ -34,7 +35,7 @@ int get_num_elements(slist_t *list) {
 list_item_t *get_list_item_with_handler(slist_t *list, int handler) {
     list_item_t *current = list->head;
     while (current != NULL) {
-        if (current->value = handler) {
+        if (current->value == handler) {
             return current;
         }
         current = current->next;
@@ -49,15 +50,15 @@ void add(slist_t *list, list_item_t *list_item) {
 	list_item_t *last = list->tail;
 	// The list is empty
 	if (last == NULL) {
-		newItem->next = NULL;
-		newItem->prev = NULL;
-		list->head = newItem;
-		list->tail = newItem;
+		list_item->next = NULL;
+		list_item->prev = NULL;
+		list->head = list_item;
+		list->tail = list_item;
 	} else {
-		newItem->next = NULL;
-		newItem->prev = last;
-		last->next = newItem;
-		list->tail = newItem;
+		list_item->next = NULL;
+		list_item->prev = last;
+		last->next = list_item;
+		list->tail = list_item;
 	}
 }
 

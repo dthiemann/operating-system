@@ -50,9 +50,10 @@ typedef struct __attribute__ ((__packed__)) {
 /**
  FAT entry
  */
+/*
 typedef struct __attribute__ ((__packed__)) {
     uint16_t state;
-} fat_t;
+} fat_t; */
 
 // -- added support for initializing the list
 
@@ -73,9 +74,15 @@ typedef struct single_list {
 } slist_t;
 
 void init(slist_t *list);
-void add(slist_t *list, char *value);
+void add(slist_t *list, list_item_t *list_item);
 void print(slist_t *list);
 void empty(slist_t *list);
 void bublesort(slist_t *list);
-
 int get_num_elements(slist_t *list);
+list_item_t *get_list_item_with_handler(slist_t *list, int handler);
+
+
+
+
+
+

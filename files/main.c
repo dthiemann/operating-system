@@ -19,6 +19,7 @@
  */
 
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
@@ -40,40 +41,75 @@ uint16_t clusterToBytes(mbr_t *myMBR, uint16_t address);
 entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child);
 
 mbr_t * getMBR();
-fat_t * getFAT();
+uint16_t * getFAT();
+void write_full(uint8_t *ptr, size_t bytes, FILE *f);
+void save_fat();
 
 /**********************************************/
 
 /* Global variables */
-mbr_t myMBR;
+mbr_t *myMBR;
 FILE *my_file;
-fat_t *fat;
+uint16_t *fat;
 char *file_name = "FAT.bin";
 slist_t *open_files;
 
-/* Formats the FAT file system */
-void format(int16_t sector_size, int16_t cluster_size, uint16_t disk_size) {
-    uint16_t cluster_in_bytes = cluster_size * sector_size;
+int cluster_sz_bytes;
+ssize_t fat_size;
+uint16_t alloc_entries;
+uint16_t total_entries;
+
+#define	FAT_FREE		0xFFFF
+#define FAT_END			0XFFFE
+#define	FAT_UNALLOC		0xFFFD
+
+
+void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
+    
+    cluster_sz_bytes = cluster_sz * sector_sz;
     /* Most difficult to implement */
     my_file = fopen(file_name, "wb+");
     
-    myMBR.sector_sz = sector_size;
-    myMBR.cluster_sz = cluster_size;
-    myMBR.disk_sz = disk_size;
     
-    /* Initialize the FAT with -1 for unnalocated */
-    fat = malloc(sizeof(fat_t)*myMBR.fat_len);
-    for (int i = 0; i < myMBR.fat_len; i++) {
-        fat[i].state = 0xFFFF;
-    }
+    /* Settng up FAT */
+    uint8_t *extended_mbr = (uint8_t *)malloc(cluster_sz_bytes);
+    bzero(extended_mbr, cluster_sz_bytes); /* fill with zeros */
     
-    for (int i = 0; i < 6; i++) {
-        myMBR.disk_name[i] = file_name[i];
-    }
-    
-    /* Edit this!!!! */
-    myMBR.data_start = (sizeof(myMBR) + sizeof(fat))/cluster_in_bytes;
+    myMBR = (mbr_t*)(&extended_mbr[0]);
 
+    myMBR->sector_sz = sector_sz;
+    myMBR->cluster_sz = cluster_sz;
+    myMBR->disk_sz = disk_sz;
+    myMBR->fat_start = 1;
+    
+    double fat_length = disk_sz * sizeof(uint16_t) / ((double) cluster_sz * sector_sz);
+    fat_length = ceil(fat_length);
+    
+    myMBR->fat_len = fat_length;
+    myMBR->data_start = fat_length + 1;
+    
+    strcpy(myMBR->disk_name, "no name");
+    printf("fat start = %d len= %d \n", myMBR->fat_start, myMBR->fat_len);
+    
+    //save the mbr to disk
+    write_full((uint8_t *) &extended_mbr[0], cluster_sz_bytes, my_file);
+    
+    // allocate the fat
+    fat = (uint16_t *) malloc(myMBR->fat_len * cluster_sz_bytes);
+    alloc_entries = disk_sz;
+    total_entries = myMBR->fat_len * cluster_sz_bytes / sizeof(uint16_t);
+    
+    printf("fat alloc = %d total = %d\n", alloc_entries, total_entries);
+    
+    for (int i = 0; i < alloc_entries; i++) {
+        fat[i] = FAT_FREE;
+    }
+    for (int i = alloc_entries + 1; i < total_entries; i++) {
+        fat[i] = FAT_UNALLOC;
+    }
+    
+    fat_size = myMBR->fat_len * cluster_sz_bytes;
+    save_fat();
     
     /** 
      Create root directory 
@@ -92,36 +128,21 @@ void format(int16_t sector_size, int16_t cluster_size, uint16_t disk_size) {
     root_dir->entry_type = 1;   /* Directory */
     root_dir->size = 0;         /* 0 b/c directory */
     
+    
     mkdir(root_dir->name, 0700);
     
-    /** 
-     write data to disk 
-     */
+    fwrite(&myMBR, sizeof(cluster_sz*sector_sz), 1, my_file);
     
-    fwrite(&myMBR, sizeof(cluster_size*sector_size), 1, my_file);
-    
-    int fat_size_in_cluster = sizeof(fat)/cluster_in_bytes;
-    int fat_size = (fat_size_in_cluster + 1) * cluster_in_bytes;
-    
-    /* FAT size = disk size divided by cluster size */
-    int max_fat_length = disk_size - 1 - (fat_size_in_cluster + 1);
-    
-    myMBR.fat_start = 1;
-    myMBR.fat_len = max_fat_length;
-    
-    fat[0].state = 0;
-    fat[1].state = 1;
-    
-    fseek(my_file, cluster_in_bytes, 0);
+    fseek(my_file, cluster_sz_bytes, 0);
     fwrite(&fat, sizeof(fat_size), 1, my_file);
     
-    /* Move to first data segment */
-    fseek(my_file, (myMBR.data_start)*cluster_in_bytes, 0);
-    fwrite(&root_dir, cluster_in_bytes, 1, my_file);
+    fseek(my_file, (myMBR->data_start)*cluster_sz_bytes, 0);
+    fwrite(&root_dir, cluster_sz_bytes, 1, my_file);
     
-    /**
-     Save file
-     */
+    free(extended_mbr);
+    
+    init(open_files);
+
     fclose(my_file);
 }
 
@@ -142,11 +163,11 @@ int fs_opendir(char *absolute_path) {
         
         int num = 0;        /* FAT navigation */
         int count = 0;      /* for path */
-        fat_t *myFAT = getFAT();
+        uint16_t *myFAT = getFAT();
         
         part = strtok(absolute_path, "/");
         /* Iterate through FAT until empty or found */
-        uint16_t cluster_num = myFAT[num].state;
+        uint16_t cluster_num = myFAT[num];
         while (count < path_index) {
             entry_t temp_entry = get_entry_from_cluster(cluster_num);
             
@@ -179,7 +200,7 @@ int fs_opendir(char *absolute_path) {
                 cluster_num++;
                 
                 /* Return -1 when we reach end of file */
-                if (myFAT[cluster_num].state == 0xFFFF) { return -1; }
+                if (myFAT[cluster_num] == 0xFFFF) { return -1; }
             }
         }
         
@@ -253,10 +274,10 @@ entry_t *fs_ls(int dh, void *prev) {
 /* File operations */
 int fs_open(char *absolute_path, char *mode) {
     
-    bool is_present = false;
+    int is_present = 0;
     
     /* Check if the file exists */
-    if (access( absolute_path, F_OK ) != -1) { is_present = true; }
+    if (access( absolute_path, F_OK ) != -1) { is_present = 1; }
     
     
     FILE *my_file = fopen(absolute_path, mode);
@@ -271,7 +292,7 @@ int fs_open(char *absolute_path, char *mode) {
     add(open_files, &new_open_file);
     
     /* Add file to a cluster and write to disk */
-    if (is_present == false) {
+    if (is_present == 0) {
         
     }
     
@@ -380,7 +401,7 @@ int get_current_time() {
 /* Finds the next available cluster to write data to */
 int get_available_cluster(uint16_t fat_len) {
     for (int i = 0; i < fat_len; i++) {
-        if (fat[i].state == 0xFFFF) {
+        if (fat[i] == 0xFFFF) {
             return i;
         }
     }
@@ -394,7 +415,7 @@ int get_available_cluster_in_bytes(uint16_t fat_len) {
     uint16_t clust_sz_bytes = mbr->cluster_sz * mbr->sector_sz;
     
     for (int i = 0; i < fat_len; i++) {
-        if (fat[i].state == 0xFFFF) {
+        if (fat[i] == 0xFFFF) {
             return i * clust_sz_bytes;
         }
     }
@@ -403,14 +424,14 @@ int get_available_cluster_in_bytes(uint16_t fat_len) {
 }
 
 /* get FAT from disk */
-fat_t * getFAT() {
+uint16_t * getFAT() {
     FILE *my_file = fopen(file_name, "rb+");
     mbr_t *myMBR;
     
     fread(&myMBR, sizeof(mbr_t), 1, my_file);
     
     fseek(my_file, myMBR->cluster_sz * myMBR->sector_sz, 0);
-    fat_t *myFat;
+    uint16_t *myFat;
     
     fread(&myFat, myMBR->fat_len * myMBR->cluster_sz * myMBR->sector_sz, 1, my_file);
     fclose(my_file);
@@ -438,11 +459,11 @@ uint16_t clusterToBytes(mbr_t *myMBR, uint16_t address) {
 entry_t get_entry_from_cluster(uint16_t cluster) {
     FILE *f = fopen(file_name, "r");
     mbr_t *myMBR = getMBR();
-    fat_t *myFAT = getFAT();
+    uint16_t *myFAT = getFAT();
     
     entry_t my_entry;
     /* Nothing exists at that cluster */
-    if (myFAT[cluster].state == 0xFFFF) { return my_entry; }
+    if (myFAT[cluster] == 0xFFFF) { return my_entry; }
     
     /* Find where the data starts */
     uint16_t cluster_size_in_bytes = myMBR->cluster_sz * myMBR->sector_sz;
@@ -460,11 +481,11 @@ entry_t get_entry_from_cluster(uint16_t cluster) {
 entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child) {
     FILE *f = fopen(file_name, "r");
     mbr_t *myMBR = getMBR();
-    fat_t *myFAT = getFAT();
+    uint16_t *myFAT = getFAT();
     
     entry_ptr_t my_child;
     /* Nothing exists at that cluster */
-    if (myFAT[cluster].state == 0xFFFF) { return my_child; }
+    if (myFAT[cluster] == 0xFFFF) { return my_child; }
     
     /* Find where the data starts */
     uint16_t cluster_size_in_bytes = myMBR->cluster_sz * myMBR->sector_sz;
@@ -506,6 +527,29 @@ int find_open_child_slot_for_cluster(int directory_handler) {
     return -1;
 }
 
+/**
+ Provided by Octav Chipara :-)
+ */
+void write_full(uint8_t *ptr, size_t bytes, FILE *f) {
+    do {
+        int sz = fwrite(ptr, 1, bytes, f);
+        if (sz < 0) {
+            perror("write error");
+            exit(0);
+        }
+        bytes = bytes - sz;
+        ptr = &ptr[sz];
+    } while (bytes > 0);
+}
+
+/**
+ Provided by Octav Chipara :-)
+ */
+void save_fat() {
+    fseek(my_file, cluster_sz_bytes + 1, SEEK_SET);
+    write_full((uint8_t *)(&fat[0]), fat_size,  my_file);
+}
+
 /**********************************************/
 /**********************************************/
 /**********************************************/
@@ -515,7 +559,7 @@ void print_disk() {
     FILE *f;
     //mbr_t * mbr_test = malloc(sizeof(mbr_t));
     mbr_t *mbr_test = getMBR();
-    //fat_t fat_entry;
+    //fat_entry;
     entry_t entry;
     entry_ptr_t ptr;
     int i, j;
@@ -529,20 +573,20 @@ void print_disk() {
     printf("FAT LENGTH:   %d clusters\n", mbr_test->fat_len);
     printf("DATA START:   %dnd cluster\n", mbr_test->data_start);
     
-    fat_t * entries = getFAT();
+    uint16_t * entries = getFAT();
     printf("============  FAT INFO  ============\n");
     fseek(f, (mbr_test->sector_sz * mbr_test->cluster_sz) - 1, SEEK_SET);
     /* Part G */
     
-    int numRequiredFatEntries = myMBR.fat_len;
+    int numRequiredFatEntries = myMBR->fat_len;
     
     for(i = 0; i < numRequiredFatEntries; i++)
-        printf("%d %d \n", entries[i].state, i);
+        printf("%d %d \n", entries[i], i);
     
     printf("============  DATA INFO  ===========\n");
     for (i = 0; i < numRequiredFatEntries; i++) {
-        if (entries[i].state !=  0xFFFF) {
-            fseek(f, clusterToBytes(mbr_test, entries[i].state), SEEK_SET);
+        if (entries[i] !=  0xFFFF) {
+            fseek(f, clusterToBytes(mbr_test, entries[i]), SEEK_SET);
             fread(&entry, sizeof(entry_t), 1, f);
             if (entry.entry_type != 2){
                 printf("ENTRY:    %s\n", entry.name);
@@ -573,19 +617,10 @@ void print_disk() {
 
 
 int main(int argc, const char * argv[]) {
-    // insert code here...
-    //printf("%d\n", 3/2);
+
     
-    //format(64, 1, 2000);
+    format(512, 1, 2048);
     
-    //printf("%s\n", myMBR.disk_name);
-    
-    char str[] = "path/to/directory";
-    char *part = strtok(str, "/");
-    while (part != NULL) {
-        printf("%s \n", part);
-        part = strtok(NULL, "/");
-    }
 
     return 0;
 }
