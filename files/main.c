@@ -71,6 +71,7 @@ void format(int16_t sector_size, int16_t cluster_size, uint16_t disk_size) {
         myMBR.disk_name[i] = file_name[i];
     }
     
+    /* Edit this!!!! */
     myMBR.data_start = (sizeof(myMBR) + sizeof(fat))/cluster_in_bytes;
 
     

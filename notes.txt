@@ -1,0 +1,46 @@
+MBR = 1 cluster
+FAT_size_in_bytes = ceil(disk_size/cluster_size_in_bytes) * 2
+FAT = ceil(FAT_size_in_bytes/cluster_size_in_bytes)
+Data = Disk_size - FAT_size - 1 (in clusters)
+	cluster_size_in_bytes = cluster_size * sector_size
+
+
+Notes on file/directory creation
+
+root directory @ cluster 0;
+	1 - 1 byte for type
+	time - 4 bytes
+	date 4 bytes
+	17 bytes for name and stuff
+	0 - 4 bytes for size
+		pointer type, reserved, start_pointer == 4 bytes
+		(0, ?, 1 (points to cluster 1) )
+		
+128 bytes = floor((128-26)/4) = 25 entries in fat
+	128 bytes per cluster
+	26 bytes in entry_t
+	
+	
+FAT 0 0xFFFE (no accessor)
+	1 0xFFFF
+	
+Cluster	1 
+	{
+		0
+		...
+		file_name
+		...
+		...
+		25 entries of 4 bytes for children (empty at first) - set start to 0xFFFF
+	}
+
+(1) Find free entry in FAT
+(2) Mark as used (in FAT)
+(3) init cluster for file
+(4) link it to parent
+
+When we fill up the 25 child sections and want to add more...
+... we add a final entry at 24 (assuming we start at 0) and...
+... initialize it with (2, ?, cluster of children)
+
+Use valgrind for debugging
