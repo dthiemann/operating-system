@@ -258,12 +258,16 @@ int fs_open(char *absolute_path, char *mode) {
     new_open_file.value = get_num_elements(open_files) + 1;
     new_open_file.the_file = my_file;
     
+    /* Add file to open files data structures */
     add(open_files, &new_open_file);
     
-    return return new_open_file.value;
+    return new_open_file.value;
 }
 
 int fs_close(int fh) {
+    list_item_t *my_item = get_list_item_with_handler(open_files, fh);
+    
+    fclose(my_item->the_file);
     return 0;
 }
 

@@ -30,6 +30,19 @@ int get_num_elements(slist_t *list) {
 	}
 }
 
+/* Get list_item given index number */
+list_item_t *get_list_item_with_handler(slist_t *list, int handler) {
+    list_item_t *current = list->head;
+    while (current != NULL) {
+        if (current->value = handler) {
+            return current;
+        }
+        current = current->next;
+    }
+    
+    return NULL;
+}
+
 // Adds an element to a current list, *list, wtih value, *string
 void add(slist_t *list, list_item_t *list_item) {
 
