@@ -46,6 +46,8 @@ void write_full(uint8_t *ptr, size_t bytes, FILE *f);
 void save_fat();
 
 int get_number_of_files();
+void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster);
+void create_file_or_directory(char *path, entry_t *my_entry);
 
 /**********************************************/
 
@@ -306,9 +308,11 @@ int fs_close(int fh) {
 
 /* Loads a file system given under disk_file */
 void load_disk(char *disk_file) {
+    char *path = "/root";
+    
     file_name = disk_file;
     mbr_t *mbr = getMBR();
-    uint16_t = getFAT();
+    uint16_t *fat = getFAT();
     
     /* Read root directory */
     uint16_t root_cluster = mbr->data_start;
@@ -317,7 +321,14 @@ void load_disk(char *disk_file) {
     int entrys = 0;
     int num_entries = get_number_of_files();
     for (int i = 0; i < current.numChildren; i++ ) {
-            
+        entry_ptr_t child_ptr = get_children_data_from_cluster(root_cluster, i);
+        entry_t child = get_entry_from_cluster(child_ptr.start);
+        if (child.entry_type == 1) {
+            analyze_new_directory(path, &child, child_ptr.start);
+        }
+        
+        /* Write the file */
+        create_file_or_directory(path, &child);
     }
 }
 
@@ -340,15 +351,15 @@ void create_file_or_directory(char *path, entry_t *my_entry) {
 /* goes through all the children of a directory */
 void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster) {
     char *new_path = (char *)malloc(sizeof(current_path) + sizeof(my_entry->name));
-    strcat(new_path, path);
+    strcat(new_path, current_path);
     strcat(new_path, "/");
     strcat(new_path, my_entry->name);
     
     for(int i = 0; i < my_entry->numChildren; i++) {
         entry_ptr_t child_ptr = get_children_data_from_cluster(cluster, i);
         entry_t child = get_entry_from_cluster(child_ptr.start);
-        if (child->entry_type == 1) {
-            analyze_new_directory(new_path, &child, child.start);
+        if (child.entry_type == 1) {
+            analyze_new_directory(new_path, &child, child_ptr.start);
         }
         
         /* Write the file */
