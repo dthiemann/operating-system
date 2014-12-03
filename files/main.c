@@ -209,9 +209,7 @@ int fs_opendir(char *absolute_path) {
                 if (myFAT[cluster_num] == 0xFFFF || myFAT[cluster_num] == 0xFFFD) { return -1; }
             }
         }
-        
-        /* No match was found */
-        return -1;
+        return cluster_num;
     }
     /* Path doesn't exist */
     else {
@@ -284,34 +282,111 @@ int fs_open(char *absolute_path, char *mode) {
     /* Check if the file exists */
     if (access( absolute_path, F_OK ) != -1) { is_present = 1; }
     
+    /* Find number of subdirectories */
+    char *part_of_path = strtok(absolute_path, "/");
+    // Get number of directories used in the path
+    int number_of_dirs = 0;
+    while (part_of_path != NULL) {
+        number_of_dirs++;
+        part_of_path = strtok(NULL, "/");
+    }
     
+    /* Check if parent path exists */
+    char *parent_path = (char *) malloc (sizeof(absolute_path));
+    number_of_dirs--;
+    
+    char *temp = strtok(absolute_path, "/");
+    for (int i = 0; i < number_of_dirs; i++) {
+        strcat(parent_path, temp);
+        strcat(parent_path, "/");
+        temp = strtok(NULL, "/");
+    }
+    
+    /* Parent path doesn't exist, return error */
+    if (access( parent_path, F_OK ) != -1) { return -1; }
+    
+    /* Add file to a cluster and write to disk if it doesn't exist */
+    uint16_t cluster;
+    if (is_present == 0) {
+        
+        /* root directory */
+        part_of_path = strtok(absolute_path, "/");
+        fat = getFAT();
+        
+        /* root entry */
+        int cluster_num = 0;
+        entry_t entry = get_entry_from_cluster(cluster_num);
+        
+        /* Get parent cluster */
+        int current_dir_num = 0;
+        while (current_dir_num < number_of_dirs) {
+            
+            part_of_path = strtok(NULL, "/");
+            int number_of_children = entry.numChildren;
+            int child_num = 0;
+            
+            /* Iterate through all the children to find appropriate directory */
+            while(child_num < number_of_children) {
+                entry_ptr_t child_ptr = get_children_data_from_cluster(cluster_num, child_num);
+                entry_t child = get_entry_from_cluster(child_ptr.start);
+                
+                /* if child is next in path traverse through this directory */
+                if (strcmp(part_of_path, child.name) == 0 && child.entry_type == 1) {
+                    cluster_num = child_ptr.start;
+                    entry = child;
+                    break;
+                }
+                child_num++;
+            }
+            current_dir_num++;
+        }
+        
+        /* Have cluster of parent directory, need to add child */
+        cluster = get_available_cluster()
+        uint16_t cluster_local_bytes = get_available_cluster_in_bytes();
+        
+        entry_t *new_entry = (entry_t *) malloc(sizeof(entry_t));
+        
+        /* Create new entry */
+        char *f_name;
+        int i = 0;
+        while (i < number_of_dirs + 1) {
+            f_name = strtok(absolute_path, "/");
+        }
+        new_entry->name = f_name;
+        new_entry->name_len = sizeof(f_name);
+        new_entry->entry_type = 0;
+        new_entry->creation_time = get_current_time();
+        new_entry->creation_date = get_current_date();
+        new_entry->size = 0;
+        new_entry->numChildren = 0;
+        
+        entry_ptr_t *child_entry = (entry_ptr_t *)malloc(sizeof(entry_ptr_t));
+        child_entry->type = 0;
+        child_entry->start = cluster;
+        
+        /* Write child to bin file */
+        fseek(my_file, cluster_local_bytes, SEEK_SET);
+        fwrite(&new_entry, sizeof(cluster_sz_bytes), 1, my_file);
+        
+        int child_local = find_open_child_slot_for_cluster(cluster_num);
+        fseek(my_file, child_local, SEEK_SET);
+        fwrite(&child_entry, sizeof(entry_ptr_t), 1, my_file);
+        
+    }
+    
+    /* Parent path exists... create file */
     FILE *my_file = fopen(absolute_path, mode);
     
     /* Need to work on this */
     list_item_t new_open_file;
-    new_open_file.value = get_num_elements(open_files) + 1;
+    new_open_file.value = cluster;
     new_open_file.the_file = my_file;
     new_open_file.mode = mode;
     
     /* Add file to open files data structures */
     add(open_files, &new_open_file);
-    
-    /* Add file to a cluster and write to disk if it doesn't exist */
-    if (is_present == 0) {
-        char *part_of_path = strtok(absolute_path, "/");
-        // Get number of directories used in the path
-        int number_of_dirs = 0;
-        while (part_of_path != NULL) {
-            number_of_dirs++;
-            part_of_path = strtok(NULL, "/");
-        }
-        number_of_dirs--;
-        
-        /* Get parent cluster */
-        
-        
-    }
-    
+
     return new_open_file.value;
 }
 
