@@ -111,6 +111,7 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     fat_size = myMBR->fat_len * cluster_sz_bytes;
     save_fat();
     
+    
     /** 
      Create root directory 
      */
@@ -128,17 +129,15 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     root_dir->entry_type = 1;   /* Directory */
     root_dir->size = 0;         /* 0 b/c directory */
     
-    
     mkdir(root_dir->name, 0700);
     
-    fwrite(&myMBR, sizeof(cluster_sz*sector_sz), 1, my_file);
-    
-    fseek(my_file, cluster_sz_bytes, 0);
-    fwrite(&fat, sizeof(fat_size), 1, my_file);
+    /* Write root directory to FAT.bin */
     
     fseek(my_file, (myMBR->data_start)*cluster_sz_bytes, 0);
     fwrite(&root_dir, cluster_sz_bytes, 1, my_file);
     
+    //printf("size of root_dir %d\n", cluster_sz_bytes);
+
     free(extended_mbr);
     
     init(open_files);
