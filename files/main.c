@@ -45,13 +45,15 @@ uint16_t * getFAT();
 void write_full(uint8_t *ptr, size_t bytes, FILE *f);
 void save_fat();
 
+int get_number_of_files();
+
 /**********************************************/
 
 /* Global variables */
 mbr_t *myMBR;
 FILE *my_file;
 uint16_t *fat;
-char *file_name = "FAT.bin";
+char *file_name;
 slist_t *open_files;
 
 int cluster_sz_bytes;
@@ -65,7 +67,7 @@ uint16_t total_entries;
 
 
 void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
-    
+    file_name = "disk";
     cluster_sz_bytes = cluster_sz * sector_sz;
     /* Most difficult to implement */
     my_file = fopen(file_name, "wb+");
@@ -136,8 +138,6 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     fseek(my_file, (myMBR->data_start)*cluster_sz_bytes, 0);
     fwrite(&root_dir, cluster_sz_bytes, 1, my_file);
     
-    //printf("size of root_dir %d\n", cluster_sz_bytes);
-
     free(extended_mbr);
     
     init(open_files);
@@ -258,9 +258,8 @@ void fs_mkdir(int dh, char *child_name) {
 /**
  prev - represents the # of child to get
  */
-entry_t *fs_ls(int dh, void *prev) {
-    int *child = (int *)prev;
-    entry_ptr_t child_data = get_children_data_from_cluster(dh, *child);
+entry_t *fs_ls(int dh, int child_num) {
+    entry_ptr_t child_data = get_children_data_from_cluster(dh, child_num);
     
     if (&child_data == NULL) { return NULL; }
     
@@ -303,6 +302,58 @@ int fs_close(int fh) {
     
     fclose(my_item->the_file);
     return 0;
+}
+
+/* Loads a file system given under disk_file */
+void load_disk(char *disk_file) {
+    file_name = disk_file;
+    mbr_t *mbr = getMBR();
+    uint16_t = getFAT();
+    
+    /* Read root directory */
+    uint16_t root_cluster = mbr->data_start;
+    entry_t current = get_entry_from_cluster(root_cluster);
+    
+    int entrys = 0;
+    int num_entries = get_number_of_files();
+    for (int i = 0; i < current.numChildren; i++ ) {
+            
+    }
+}
+
+/* Creates teh physical directory/file in the root directory */
+void create_file_or_directory(char *path, entry_t *my_entry) {
+    char *full_path = (char *) malloc(sizeof(path) + sizeof(my_entry->name));
+    strcat(full_path, path);
+    strcat(full_path, "/");
+    strcat(full_path, my_entry->name);
+    
+    /* Check type */
+    if (my_entry->entry_type == 0) {
+        FILE *f = fopen(full_path, "w+");
+        fclose(f);
+    } else if (my_entry->entry_type == 1) {
+        mkdir(full_path, 0700);
+    }
+}
+
+/* goes through all the children of a directory */
+void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster) {
+    char *new_path = (char *)malloc(sizeof(current_path) + sizeof(my_entry->name));
+    strcat(new_path, path);
+    strcat(new_path, "/");
+    strcat(new_path, my_entry->name);
+    
+    for(int i = 0; i < my_entry->numChildren; i++) {
+        entry_ptr_t child_ptr = get_children_data_from_cluster(cluster, i);
+        entry_t child = get_entry_from_cluster(child_ptr.start);
+        if (child->entry_type == 1) {
+            analyze_new_directory(new_path, &child, child.start);
+        }
+        
+        /* Write the file */
+        create_file_or_directory(new_path, &child);
+    }
 }
 
 
@@ -368,6 +419,8 @@ int fs_rm() {
 /**********************************************/
 /**********************************************/
 /**********************************************/
+
+
 
 /* Returns current date in a 16 bit integer */
 int get_current_date() {
@@ -522,7 +575,6 @@ int find_open_child_slot_for_cluster(int directory_handler) {
             fseek(my_file, dir_local + current_seek, SEEK_SET);
         }
     }
-    
     return -1;
 }
 
@@ -547,6 +599,19 @@ void write_full(uint8_t *ptr, size_t bytes, FILE *f) {
 void save_fat() {
     fseek(my_file, cluster_sz_bytes + 1, SEEK_SET);
     write_full((uint8_t *)(&fat[0]), fat_size,  my_file);
+}
+
+int get_number_of_files() {
+    mbr_t *mbr = getMBR();
+    uint16_t *fat = getFAT();
+    int count = 0;
+    
+    for(int i = 0; i < mbr->fat_len; i++) {
+        if (fat[i] != 0xFFFF && fat[i] != 0xFFFD) {
+            count = count + 1;
+        }
+    }
+    return count;
 }
 
 /**********************************************/
