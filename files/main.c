@@ -113,8 +113,6 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     }
     
     fat_size = myMBR->fat_len * cluster_sz_bytes;
-    save_fat();
-    
     
     /** 
      Create root directory 
@@ -134,6 +132,9 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     root_dir->size = 0;         /* 0 b/c directory */
     
     mkdir(root_dir->name, 0700);
+    /* Updated FAT to point to cluster */
+    fat[0] = 0;
+    save_fat();
     
     /* Write root directory to FAT.bin */
     
@@ -169,12 +170,16 @@ int fs_opendir(char *absolute_path) {
         part = strtok(absolute_path, "/");
         /* Iterate through FAT until empty or found */
         uint16_t cluster_num = myFAT[num];
+        
+        /* count represents the portion of the path we are at */
         while (count < path_index) {
+            
             entry_t temp_entry = get_entry_from_cluster(cluster_num);
             
             /* Find directory */
             if (strcmp(part, temp_entry.name) == 0) {
                 int child_num = 0;
+                /* Read next part of path */
                 part = strtok(NULL, "/");
                 
                 /* Found the child */
@@ -201,7 +206,7 @@ int fs_opendir(char *absolute_path) {
                 cluster_num++;
                 
                 /* Return -1 when we reach end of file */
-                if (myFAT[cluster_num] == 0xFFFF) { return -1; }
+                if (myFAT[cluster_num] == 0xFFFF || myFAT[cluster_num] == 0xFFFD) { return -1; }
             }
         }
         
@@ -291,8 +296,19 @@ int fs_open(char *absolute_path, char *mode) {
     /* Add file to open files data structures */
     add(open_files, &new_open_file);
     
-    /* Add file to a cluster and write to disk */
+    /* Add file to a cluster and write to disk if it doesn't exist */
     if (is_present == 0) {
+        char *part_of_path = strtok(absolute_path, "/");
+        // Get number of directories used in the path
+        int number_of_dirs = 0;
+        while (part_of_path != NULL) {
+            number_of_dirs++;
+            part_of_path = strtok(NULL, "/");
+        }
+        number_of_dirs--;
+        
+        /* Get parent cluster */
+        
         
     }
     
