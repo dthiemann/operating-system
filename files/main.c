@@ -464,7 +464,7 @@ void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster) {
  
  Returns 1 for success and -1 for failure
  */
-/**
+
 int fs_write(const void *buffer, int count, int stream) {
     
     list_item_t *my_item = get_list_item_with_handler(open_files, stream);
@@ -478,18 +478,18 @@ int fs_write(const void *buffer, int count, int stream) {
     // Success
     return 1;
 }
-*/
+
 /**
  Reads an item from a file
  
  Returns 1 for sucess and -1 for failure
  */
-/**
+
 int fs_read(const void *buffer, int count, int stream) {
     
     list_item_t *my_item = get_list_item_with_handler(open_files, stream);
     
-    // File in wrong mode
+    
     if (strcmp(my_item->mode, "w") == 0) { return -1; }
     
     FILE *my_file = my_item->the_file;
@@ -497,7 +497,7 @@ int fs_read(const void *buffer, int count, int stream) {
     
     return 1;
 }
-*/
+
 
 /**********************************************/
 
