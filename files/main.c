@@ -423,41 +423,6 @@ void load_disk(char *disk_file) {
     }
 }
 
-/* Creates teh physical directory/file in the root directory */
-void create_file_or_directory(char *path, entry_t *my_entry) {
-    char *full_path = (char *) malloc(sizeof(path) + sizeof(my_entry->name));
-    strcat(full_path, path);
-    strcat(full_path, "/");
-    strcat(full_path, my_entry->name);
-    
-    /* Check type */
-    if (my_entry->entry_type == 0) {
-        FILE *f = fopen(full_path, "w+");
-        fclose(f);
-    } else if (my_entry->entry_type == 1) {
-        mkdir(full_path, 0700);
-    }
-}
-
-/* goes through all the children of a directory */
-void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster) {
-    char *new_path = (char *)malloc(sizeof(current_path) + sizeof(my_entry->name));
-    strcat(new_path, current_path);
-    strcat(new_path, "/");
-    strcat(new_path, my_entry->name);
-    
-    for(int i = 0; i < my_entry->numChildren; i++) {
-        entry_ptr_t child_ptr = get_children_data_from_cluster(cluster, i);
-        entry_t child = get_entry_from_cluster(child_ptr.start);
-        if (child.entry_type == 1) {
-            analyze_new_directory(new_path, &child, child_ptr.start);
-        }
-        
-        /* Write the file */
-        create_file_or_directory(new_path, &child);
-    }
-}
-
 
 /**
  Writes an item to a file
@@ -522,7 +487,40 @@ int fs_rm() {
 /**********************************************/
 /**********************************************/
 
+/* Creates teh physical directory/file in the root directory */
+void create_file_or_directory(char *path, entry_t *my_entry) {
+    char *full_path = (char *) malloc(sizeof(path) + sizeof(my_entry->name));
+    strcat(full_path, path);
+    strcat(full_path, "/");
+    strcat(full_path, my_entry->name);
+    
+    /* Check type */
+    if (my_entry->entry_type == 0) {
+        FILE *f = fopen(full_path, "w+");
+        fclose(f);
+    } else if (my_entry->entry_type == 1) {
+        mkdir(full_path, 0700);
+    }
+}
 
+/* goes through all the children of a directory */
+void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster) {
+    char *new_path = (char *)malloc(sizeof(current_path) + sizeof(my_entry->name));
+    strcat(new_path, current_path);
+    strcat(new_path, "/");
+    strcat(new_path, my_entry->name);
+    
+    for(int i = 0; i < my_entry->numChildren; i++) {
+        entry_ptr_t child_ptr = get_children_data_from_cluster(cluster, i);
+        entry_t child = get_entry_from_cluster(child_ptr.start);
+        if (child.entry_type == 1) {
+            analyze_new_directory(new_path, &child, child_ptr.start);
+        }
+        
+        /* Write the file */
+        create_file_or_directory(new_path, &child);
+    }
+}
 
 /* Returns current date in a 16 bit integer */
 int get_current_date() {
