@@ -29,7 +29,7 @@
 #include "list.h"
 
 /**********************************************/
-/* Function Declaration */
+/* Helper Function Declaration */
 
 int get_current_time();
 int get_current_date();
@@ -43,6 +43,7 @@ entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child);
 mbr_t * getMBR();
 uint16_t * getFAT();
 void write_full(uint8_t *ptr, size_t bytes, FILE *f);
+void write_full_entry(entry_t *ptr, size_t bytes, FILE *f);
 void save_fat();
 
 int get_number_of_files();
@@ -72,7 +73,7 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     file_name = "disk";
     cluster_sz_bytes = cluster_sz * sector_sz;
     /* Most difficult to implement */
-    my_file = fopen(file_name, "wb+");
+    my_file = fopen(file_name, "rb+");
     
     
     /* Settng up FAT */
@@ -139,7 +140,8 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     /* Write root directory to FAT.bin */
     
     fseek(my_file, (myMBR->data_start)*cluster_sz_bytes, 0);
-    fwrite(&root_dir, cluster_sz_bytes, 1, my_file);
+    write_full_entry(&root_dir, sizeof(entry_t), my_file);
+    //fwrite(&root_dir, cluster_sz_bytes, 1, my_file);
     
     free(extended_mbr);
     
@@ -371,6 +373,7 @@ int fs_open(char *absolute_path, char *mode) {
         
         int child_local = find_open_child_slot_for_cluster(cluster_num);
         fseek(my_file, child_local, SEEK_SET);
+        //write_full(&child_entry)
         fwrite(&child_entry, sizeof(entry_ptr_t), 1, my_file);
         
     }
@@ -682,6 +685,19 @@ int find_open_child_slot_for_cluster(int directory_handler) {
  Provided by Octav Chipara :-)
  */
 void write_full(uint8_t *ptr, size_t bytes, FILE *f) {
+    do {
+        int sz = fwrite(ptr, 1, bytes, f);
+        if (sz < 0) {
+            perror("write error");
+            exit(0);
+        }
+        bytes = bytes - sz;
+        ptr = &ptr[sz];
+    } while (bytes > 0);
+}
+
+/* Writes an entry_t */
+void write_full_entry(entry_t *ptr, size_t bytes, FILE *f) {
     do {
         int sz = fwrite(ptr, 1, bytes, f);
         if (sz < 0) {
