@@ -73,8 +73,7 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     file_name = "disk";
     cluster_sz_bytes = cluster_sz * sector_sz;
     /* Most difficult to implement */
-    my_file = fopen(file_name, "rb+");
-    
+    my_file = fopen(file_name, "wb+");
     
     /* Settng up FAT */
     uint8_t *extended_mbr = (uint8_t *)malloc(cluster_sz_bytes);
@@ -98,6 +97,7 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     
     //save the mbr to disk
     write_full((uint8_t *) &extended_mbr[0], cluster_sz_bytes, my_file);
+    //fwrite(&myMBR, sizeof(cluster_sz_bytes), 1, my_file);
     
     // allocate the fat
     fat = (uint16_t *) malloc(myMBR->fat_len * cluster_sz_bytes);
@@ -140,7 +140,7 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     /* Write root directory to FAT.bin */
     
     fseek(my_file, (myMBR->data_start)*cluster_sz_bytes, 0);
-    write_full_entry(&root_dir, sizeof(entry_t), my_file);
+    write_full_entry(root_dir, sizeof(entry_t), my_file);
     //fwrite(&root_dir, cluster_sz_bytes, 1, my_file);
     
     free(extended_mbr);
@@ -313,6 +313,7 @@ int fs_open(char *absolute_path, char *mode) {
         
         /* root directory */
         part_of_path = strtok(absolute_path, "/");
+        myMBR = getMBR();
         fat = getFAT();
         
         /* root entry */
@@ -344,8 +345,8 @@ int fs_open(char *absolute_path, char *mode) {
         }
         
         /* Have cluster of parent directory, need to add child */
-        cluster = get_available_cluster()
-        uint16_t cluster_local_bytes = get_available_cluster_in_bytes();
+        cluster = get_available_cluster(myMBR->fat_len);
+        uint16_t cluster_local_bytes = get_available_cluster_in_bytes(myMBR->fat_len);
         
         entry_t *new_entry = (entry_t *) malloc(sizeof(entry_t));
         
@@ -355,7 +356,7 @@ int fs_open(char *absolute_path, char *mode) {
         while (i < number_of_dirs + 1) {
             f_name = strtok(absolute_path, "/");
         }
-        new_entry->name = f_name;
+        strcpy(new_entry->name,f_name);
         new_entry->name_len = sizeof(f_name);
         new_entry->entry_type = 0;
         new_entry->creation_time = get_current_time();
@@ -461,7 +462,7 @@ int fs_read(const void *buffer, int count, int stream) {
     if (strcmp(my_item->mode, "w") == 0) { return -1; }
     
     FILE *my_file = my_item->the_file;
-    fread(buffer, count, 1, my_file);
+    fread(&buffer, count, 1, my_file);
     
     return 1;
 }
@@ -686,7 +687,9 @@ int find_open_child_slot_for_cluster(int directory_handler) {
  */
 void write_full(uint8_t *ptr, size_t bytes, FILE *f) {
     do {
+        printf("size: %zu\n", bytes);
         int sz = fwrite(ptr, 1, bytes, f);
+        printf("size: %d\n", sz);
         if (sz < 0) {
             perror("write error");
             exit(0);
@@ -800,7 +803,8 @@ int main(int argc, const char * argv[]) {
 
     
     format(512, 1, 2048);
-    
+    //int dh = fs_opendir("/root/");
+    //printf("%d\n", dh);
 
     return 0;
 }

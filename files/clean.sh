@@ -1,3 +1,3 @@
 rm -r root/
-rm FAT.bin
+rm disk
 rm a.out
