@@ -48,6 +48,8 @@ void write_full_mbr(mbr_t *ptr, size_t bytes, FILE *f);
 void save_fat();
 
 void read_full_entry(entry_t *ptr, size_t bytes, FILE *f);
+entry_t get_root_directory();
+char *get_absolute_path_from_handler(int dh);
 
 int get_number_of_files();
 void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster);
@@ -95,7 +97,7 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     myMBR->fat_len = fat_length;
     myMBR->data_start = fat_length + 1;
     
-    strcpy(myMBR->disk_name, "no name");
+    strcpy(myMBR->disk_name, "disk");
     printf("fat start = %d len= %d \n", myMBR->fat_start, myMBR->fat_len);
     
     //save the mbr to disk
@@ -223,6 +225,13 @@ int fs_opendir(char *absolute_path) {
                 if (myFAT[cluster_num] == 0xFFFF || myFAT[cluster_num] == 0xFFFD) { return -1; }
             }
         }
+        list_item_t *new_item = (list_item_t *)malloc(sizeof(list_item_t));
+        new_item->value = cluster_num;
+        new_item->mode = NULL /* Directory */
+        new_item->the_file = NULL /* Directory */
+        new_item->isDirectory = true;
+        new_item->path = absolute_path;
+        
         return cluster_num;
     }
     /* Path doesn't exist */
@@ -235,7 +244,9 @@ int fs_opendir(char *absolute_path) {
 void fs_mkdir(int dh, char *child_name) {
     mbr_t *mbr = getMBR();
     
-    FILE *my_file = fopen(file_name, "wb+");
+    //printf("getMBR works %d\n", mbr->fat_len);
+    
+    //FILE *my_file = fopen(file_name, "wb+");
     
     int child_location = find_open_child_slot_for_cluster(dh);
     int child_cluster_local = get_available_cluster_in_bytes(mbr->fat_len);
@@ -270,8 +281,10 @@ void fs_mkdir(int dh, char *child_name) {
     fseek(my_file, child_location, SEEK_SET);
     fwrite(&new_pointer, sizeof(entry_ptr_t), 1, my_file);
     
+    char *temp = get_absolute_path_from_handler(dh);
+    
     /* Close file */
-    fclose(my_file);
+    //fclose(my_file);
 }
 
 /**
@@ -399,6 +412,8 @@ int fs_open(char *absolute_path, char *mode) {
     new_open_file.value = cluster;
     new_open_file.the_file = my_file;
     new_open_file.mode = mode;
+    new_open_file.path = absolute_path;
+    new_open_file.isDirectory = false;
     
     /* Add file to open files data structures */
     add(open_files, &new_open_file);
@@ -519,6 +534,12 @@ void create_file_or_directory(char *path, entry_t *my_entry) {
     }
 }
 
+char *get_absolute_path_from_handler(int dh) {
+    entry_t root_dir = get_root_directory();
+    list_item_t *file_node = get_list_item_with_handler(open_files, dh);
+    return file_node->path;
+}
+
 /* goes through all the children of a directory */
 void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster) {
     char *new_path = (char *)malloc(sizeof(current_path) + sizeof(my_entry->name));
@@ -536,6 +557,11 @@ void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster) {
         /* Write the file */
         create_file_or_directory(new_path, &child);
     }
+}
+
+entry_t get_root_directory() {
+    entry_t root_dir = get_entry_from_cluster(0);
+    return root_dir;
 }
 
 /* Returns current date in a 16 bit integer */
@@ -842,7 +868,7 @@ int main(int argc, const char * argv[]) {
     
     format(64, 1, 2048);
     int dh = fs_opendir("root/");
-    printf("%d\n", dh);
+    //printf("directory handler = %d\n", dh);
     
     fs_mkdir(0, "dylans_folder");
     
