@@ -269,7 +269,6 @@ void fs_mkdir(int dh, char *child_name) {
     //FILE *my_file = fopen(file_name, "wb+");
     entry_t parent_dir = get_entry_from_cluster(dh);
     int child_location = find_open_child_slot_for_cluster(dh);
-    printf("open child slot %d\n", child_location);
 
     int child_cluster = get_available_cluster(mbr->fat_len);
     int child_cluster_local = (child_cluster + myMBR->data_start) * cluster_sz_bytes;
@@ -292,11 +291,10 @@ void fs_mkdir(int dh, char *child_name) {
     new_dir.size = 0;
     new_dir.numChildren = 0;
     
-    printf("Child cluster location %d\n", child_cluster);
-    printf("Child cluster in bytes location %d\n", child_cluster_local);
     fseek(my_file, child_cluster_local, SEEK_SET);
     fwrite(&new_dir, sizeof(entry_t), 1, my_file);
     
+    /* Root dir currently only takes up 1 cluser */
     fat[child_cluster] = FAT_END;
     
     /* Create a pointer */
@@ -352,13 +350,22 @@ entry_t *fs_ls(int dh, int child_num) {
 /* File operations */
 int fs_open(char *absolute_path, char *mode) {
     
+    /* Display error if file mode is incorrect */
+    if (strcmp(mode, "w") != 0) {
+        perror("Must open file in write mode");
+        return -1;
+    }
+    
     int is_present = 0;
     
     /* Check if the file exists */
     if (access( absolute_path, F_OK ) != -1) { is_present = 1; }
     
     /* Find number of subdirectories */
-    char *part_of_path = strtok(absolute_path, "/");
+    char absolute_path_array[strlen(absolute_path)];
+    strcpy(absolute_path_array, absolute_path);
+    char *part_of_path = strtok(absolute_path_array, "/");
+    
     // Get number of directories used in the path
     int number_of_dirs = 0;
     while (part_of_path != NULL) {
@@ -368,36 +375,58 @@ int fs_open(char *absolute_path, char *mode) {
     
     /* Check if parent path exists */
     char *parent_path = (char *) malloc (sizeof(absolute_path));
+    strcpy(absolute_path_array, absolute_path);
+    
     number_of_dirs--;
     
-    char *temp = strtok(absolute_path, "/");
-    for (int i = 0; i < number_of_dirs; i++) {
+    char *temp;     /* used for inidividual directory names */
+    /* Get the parent path */
+    parent_path = strtok(absolute_path_array, "/");
+    strcat(parent_path, "/");
+
+    for (int i = 0; i < number_of_dirs-1; i++) {
+        
+        temp = strtok(NULL, "/");
+        printf("temp = %s\n", temp);
         strcat(parent_path, temp);
         strcat(parent_path, "/");
-        temp = strtok(NULL, "/");
     }
-    
     /* Parent path doesn't exist, return error */
-    if (access( parent_path, F_OK ) != -1) { return -1; }
-    
+    if (access( parent_path, F_OK ) == -1) {
+        printf("broke access \n");
+        return -1;
+    }
     /* Add file to a cluster and write to disk if it doesn't exist */
     uint16_t cluster;
     if (is_present == 0) {
-        
+       
+        printf("We are here 7\n");
         /* root directory */
-        part_of_path = strtok(absolute_path, "/");
+        strcpy(absolute_path_array, absolute_path);
+        
+        part_of_path = strtok(absolute_path_array, "/");
+        printf("We are here 7\n");
+        
+        
         myMBR = getMBR();
         fat = getFAT();
         
         /* root entry */
         int cluster_num = 0;
         entry_t entry = get_entry_from_cluster(cluster_num);
+        printf("We are here 8\n");
         
         /* Get parent cluster */
         int current_dir_num = 0;
+        
+        /** 
+         ERROR BELOW HERE SOMEWHERE
+         */
+        
         while (current_dir_num < number_of_dirs) {
             
             part_of_path = strtok(NULL, "/");
+            printf("We are here 7\n");
             int number_of_children = entry.numChildren;
             int child_num = 0;
             
@@ -931,20 +960,15 @@ int main(int argc, const char * argv[]) {
     fs_mkdir(dh, "dylans_folder2");
     fs_mkdir(dh, "dylans3");
     
+    /*
     int num_children = 0;
     while (num_children < 3) {
         entry_t *child = fs_ls(0, num_children);
         printf("child name = %s\n", child->name);
         num_children++;
-        free(child);
-    }
+        //free(child);
+    }*/
+    int result = fs_open("root/my_file.txt", "w");
     
-    /*
-    char *part = "root/";
-    char part_array[strlen(part)];
-    strcpy(part_array, part);
-    char *new_part = strtok(part_array, "/");
-    printf("%s\n", new_part);
-    */
     return 0;
 }
