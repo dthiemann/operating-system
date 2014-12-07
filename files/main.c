@@ -75,7 +75,7 @@ uint16_t total_entries;
 
 
 void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
-    file_name = "disk";
+    //file_name = "disk";
     cluster_sz_bytes = cluster_sz * sector_sz;
     /* Most difficult to implement */
     my_file = fopen(file_name, "rb+");
@@ -85,7 +85,7 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     bzero(extended_mbr, cluster_sz_bytes); /* fill with zeros */
     
     myMBR = (mbr_t*)(&extended_mbr[0]);
-
+    
     myMBR->sector_sz = sector_sz;
     myMBR->cluster_sz = cluster_sz;
     myMBR->disk_sz = disk_sz;
@@ -121,8 +121,8 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     
     fat_size = myMBR->fat_len * cluster_sz_bytes;
     
-    /** 
-     Create root directory 
+    /**
+     Create root directory
      */
     
     entry_t *root_dir = malloc(sizeof(entry_t));
@@ -152,11 +152,19 @@ void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
     
     free(extended_mbr);
     
-    init(open_files);
-
+    open_files = init();
+    
+    list_item_t *rd = (list_item_t *)malloc(sizeof(list_item_t));
+    rd->value = 0;
+    rd->isDirectory = 1;
+    rd->the_file = NULL;
+    strcpy(rd->mode, "\0");
+    strcpy(rd->path, "root/");
+    
+    add(open_files, rd);
+    
     //fclose(my_file);
 }
-
 /* Returns the cluster number of where the directory starts */
 int fs_opendir(char *absolute_path) {
     struct stat s;
@@ -227,10 +235,10 @@ int fs_opendir(char *absolute_path) {
         }
         list_item_t *new_item = (list_item_t *)malloc(sizeof(list_item_t));
         new_item->value = cluster_num;
-        new_item->mode = NULL /* Directory */
-        new_item->the_file = NULL /* Directory */
-        new_item->isDirectory = true;
-        new_item->path = absolute_path;
+        strcpy(new_item->mode, "\0"); /* Directory */
+        new_item->the_file = NULL; /* Directory */
+        new_item->isDirectory = 1;
+        strcpy(new_item->path, absolute_path);
         
         return cluster_num;
     }
@@ -247,11 +255,14 @@ void fs_mkdir(int dh, char *child_name) {
     //printf("getMBR works %d\n", mbr->fat_len);
     
     //FILE *my_file = fopen(file_name, "wb+");
-    
+    printf("in fs_mkdir 0 \n");
+    entry_t parent_dir = get_entry_from_cluster(dh);
+    printf("parent_dir name %s\n", parent_dir.name);
     int child_location = find_open_child_slot_for_cluster(dh);
+    printf("in fs_mkdir 1\n");
     int child_cluster_local = get_available_cluster_in_bytes(mbr->fat_len);
     int child_cluster = get_available_cluster(mbr->fat_len);
-    
+    printf("in fs_mkdir 2\n");
     /* Updated number of children for parent directory */
     entry_t parent_entry = get_entry_from_cluster(dh);
     parent_entry.numChildren = parent_entry.numChildren + 1;
@@ -281,7 +292,14 @@ void fs_mkdir(int dh, char *child_name) {
     fseek(my_file, child_location, SEEK_SET);
     fwrite(&new_pointer, sizeof(entry_ptr_t), 1, my_file);
     
-    char *temp = get_absolute_path_from_handler(dh);
+    
+    char *path = get_absolute_path_from_handler(dh);
+    //printf("path: %s \n", temp);
+    char total_path[strlen(path) + strlen(child_name) + 2];
+    strcpy(total_path, path);
+    strcat(total_path, child_name);
+    mkdir(total_path, 0700);
+    
     
     /* Close file */
     //fclose(my_file);
@@ -411,9 +429,9 @@ int fs_open(char *absolute_path, char *mode) {
     list_item_t new_open_file;
     new_open_file.value = cluster;
     new_open_file.the_file = my_file;
-    new_open_file.mode = mode;
-    new_open_file.path = absolute_path;
-    new_open_file.isDirectory = false;
+    strcpy(new_open_file.mode, mode);
+    strcpy(new_open_file.path, absolute_path);
+    new_open_file.isDirectory = 0;
     
     /* Add file to open files data structures */
     add(open_files, &new_open_file);
@@ -534,8 +552,8 @@ void create_file_or_directory(char *path, entry_t *my_entry) {
     }
 }
 
+/* Gets the absolute path of the parent directory from the handler */
 char *get_absolute_path_from_handler(int dh) {
-    entry_t root_dir = get_root_directory();
     list_item_t *file_node = get_list_item_with_handler(open_files, dh);
     return file_node->path;
 }
@@ -559,6 +577,7 @@ void analyze_new_directory(char *current_path, entry_t *my_entry, int cluster) {
     }
 }
 
+/* Returns a handling to the root directory */
 entry_t get_root_directory() {
     entry_t root_dir = get_entry_from_cluster(0);
     return root_dir;
@@ -651,24 +670,24 @@ uint16_t clusterToBytes(mbr_t *myMBR, uint16_t address) {
 entry_t get_entry_from_cluster(uint16_t cluster) {
     FILE *f = my_file;
     uint16_t *myFAT = fat;
-    
+    printf("In get_entry_from_cluster 0\n");
     entry_t my_entry;
     /* Nothing exists at that cluster */
     if (myFAT[cluster] == 0xFFFF) { return my_entry; }
     
     /* Find where the data starts */
-    
     uint16_t cluster_size_in_bytes = myMBR->cluster_sz * myMBR->sector_sz;
+    printf("In get_entry_from_cluster 1\n");
     uint16_t data_start_in_bytes = myMBR->data_start * cluster_size_in_bytes;
     uint16_t cluster_start = data_start_in_bytes + cluster_size_in_bytes * cluster;
 
     printf("mbr->cluster_size %d\n", myMBR->cluster_sz);
     printf("where to read %d\n", cluster_start);
-
+    
     fseek(f, cluster_start, 0);
     //int value = fread(&my_entry, sizeof(entry_t), 1, f);
     int value = fread(&my_entry, 1, sizeof(entry_t), f);
-    printf("value = %d\n", value);
+    //printf("value = %d\n", value);
     //read_full_entry(&my_entry, sizeof(entry_t), f);
     
     return my_entry;
@@ -681,6 +700,7 @@ entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child) {
     uint16_t *myFAT = fat;
     
     entry_ptr_t my_child;
+    
     /* Nothing exists at that cluster */
     if (myFAT[cluster] == 0xFFFF) { return my_child; }
     
@@ -710,6 +730,7 @@ int find_open_child_slot_for_cluster(int directory_handler) {
     int child_count = 0;
     
     while (current_seek < cluster_size_in_bytes) {
+        printf("inside find open child\n");
         entry_ptr_t temp = get_children_data_from_cluster(directory_handler, child_count);
         
         if (&temp == NULL) {
@@ -864,13 +885,17 @@ void print_disk() {
 
 
 int main(int argc, const char * argv[]) {
-
+    
+    file_name = "disk";
+    my_file = fopen(file_name, "wb+");
+    fclose(my_file);
     
     format(64, 1, 2048);
     int dh = fs_opendir("root/");
     //printf("directory handler = %d\n", dh);
     
-    fs_mkdir(0, "dylans_folder");
+    fs_mkdir(dh, "dylans_folder");
+    //fs_mkdir(dh, "dylans_folder2");
     
     /*
     char *part = "root/";

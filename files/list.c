@@ -9,10 +9,12 @@
 #include "list.h"
 
 // Creates a new slist_t structure with a given character string
-void init(slist_t *list) {
-    list = malloc(sizeof(slist_t));
+slist_t *init() {
+    slist_t *list = (slist_t *) malloc(sizeof(slist_t));
 	list->head = NULL;
 	list->tail = NULL;
+
+    return list;
 }
 
 // Returns the number of elements in the linked list
@@ -46,7 +48,6 @@ list_item_t *get_list_item_with_handler(slist_t *list, int handler) {
 
 // Adds an element to a current list, *list, wtih value, *string
 void add(slist_t *list, list_item_t *list_item) {
-
 	list_item_t *last = list->tail;
 	// The list is empty
 	if (last == NULL) {

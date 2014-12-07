@@ -59,10 +59,10 @@ typedef struct __attribute__ ((__packed__)) {
 
 typedef struct list_item {
     int value;
-    BOOL isDirectory;
+    short isDirectory;  /* 0 - file, 1 - directory */
     FILE *the_file;
-    char *mode;
-    char *path;
+    char mode[2];
+    char path[50];
 	struct list_item *next;
 	struct list_item *prev;
 } list_item_t; 
@@ -75,7 +75,8 @@ typedef struct single_list {
 	list_item_t *tail;
 } slist_t;
 
-void init(slist_t *list);
+//void init(slist_t *list);
+slist_t *init();
 void add(slist_t *list, list_item_t *list_item);
 void print(slist_t *list);
 void empty(slist_t *list);
