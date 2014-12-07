@@ -269,8 +269,11 @@ void fs_mkdir(int dh, char *child_name) {
     //FILE *my_file = fopen(file_name, "wb+");
     entry_t parent_dir = get_entry_from_cluster(dh);
     int child_location = find_open_child_slot_for_cluster(dh);
-    int child_cluster_local = get_available_cluster_in_bytes(mbr->fat_len);
+    printf("open child slot %d\n", child_location);
+
     int child_cluster = get_available_cluster(mbr->fat_len);
+    int child_cluster_local = (child_cluster + myMBR->data_start) * cluster_sz_bytes;
+    
     /* Updated number of children for parent directory */
     entry_t parent_entry = get_entry_from_cluster(dh);
     parent_entry.numChildren = parent_entry.numChildren + 1;
@@ -289,8 +292,12 @@ void fs_mkdir(int dh, char *child_name) {
     new_dir.size = 0;
     new_dir.numChildren = 0;
     
+    printf("Child cluster location %d\n", child_cluster);
+    printf("Child cluster in bytes location %d\n", child_cluster_local);
     fseek(my_file, child_cluster_local, SEEK_SET);
     fwrite(&new_dir, sizeof(entry_t), 1, my_file);
+    
+    fat[child_cluster] = FAT_END;
     
     /* Create a pointer */
     entry_ptr_t new_pointer;
@@ -308,6 +315,8 @@ void fs_mkdir(int dh, char *child_name) {
     strcat(total_path, child_name);
     mkdir(total_path, 0700);
     
+    save_fat();
+    
     fclose(my_file);
 }
 
@@ -315,12 +324,27 @@ void fs_mkdir(int dh, char *child_name) {
  prev - represents the # of child to get
  */
 entry_t *fs_ls(int dh, int child_num) {
-    entry_ptr_t child_data = get_children_data_from_cluster(dh, child_num);
+    my_file = fopen(file_name, "rb+");
     
+    entry_ptr_t child_data = get_children_data_from_cluster(dh, child_num);
     if (&child_data == NULL) { return NULL; }
     
+    
     entry_t entry = get_entry_from_cluster(child_data.start);
-    entry_t *entry_2 = &entry;
+    entry_t *entry_2 = (entry_t *)malloc(sizeof(entry_t));
+    
+    /* copy data */
+    entry_2->entry_type = entry.entry_type;
+    entry_2->creation_time = entry.creation_time;
+    entry_2->creation_date = entry.creation_date;
+    entry_2->name_len = entry.name_len;
+    strcpy(entry_2->name, entry.name);
+    entry_2->size = entry.size;
+    entry_2->numChildren = entry.numChildren;
+    
+    //printf("name of child from within fs_ls %s\n", entry_2->name);
+    
+    fclose(my_file);
     
     return entry_2;
 }
@@ -714,7 +738,7 @@ entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child) {
     uint16_t data_start_in_bytes = myMBR->data_start * cluster_size_in_bytes;
     uint16_t cluster_start = data_start_in_bytes + cluster_size_in_bytes * cluster;
     
-    fseek(f, cluster_start + sizeof(entry_ptr_t)*num_child, 0);
+    fseek(f, cluster_start + sizeof(entry_t) + sizeof(entry_ptr_t)*num_child, 0);
     fread(&my_child, sizeof(entry_ptr_t), 1, f);
     
     return my_child;
@@ -726,14 +750,19 @@ int find_open_child_slot_for_cluster(int directory_handler) {
     mbr_t *mbr = myMBR;
     uint16_t cluster_size_in_bytes = mbr->cluster_sz * mbr->sector_sz;
     
+    /* parent directory */
+    entry_t parent_dir = get_entry_from_cluster(directory_handler);
+    int number_of_children = parent_dir.numChildren;
+    
     /* Dir location in bytes */
     uint16_t dir_local = clusterToBytes(mbr, directory_handler);
     
     /* move to first child slot */
-    fseek(my_file, dir_local + sizeof(entry_t), SEEK_SET);
-    uint16_t current_seek = sizeof(entry_t);
-    int child_count = 0;
+    //fseek(my_file, dir_local + sizeof(entry_t), SEEK_SET);
+    //uint16_t current_seek = sizeof(entry_t) ;
+    //int child_count = 0;
     
+    /*
     while (current_seek < cluster_size_in_bytes) {
         entry_ptr_t temp = get_children_data_from_cluster(directory_handler, child_count);
         
@@ -743,8 +772,8 @@ int find_open_child_slot_for_cluster(int directory_handler) {
             current_seek = current_seek + sizeof(entry_ptr_t);
             fseek(my_file, dir_local + current_seek, SEEK_SET);
         }
-    }
-    return -1;
+    } */
+    return dir_local + sizeof(entry_t) + sizeof(entry_ptr_t)*number_of_children;
 }
 
 /**
@@ -900,6 +929,15 @@ int main(int argc, const char * argv[]) {
     
     fs_mkdir(dh, "dylans_folder");
     fs_mkdir(dh, "dylans_folder2");
+    fs_mkdir(dh, "dylans3");
+    
+    int num_children = 0;
+    while (num_children < 3) {
+        entry_t *child = fs_ls(0, num_children);
+        printf("child name = %s\n", child->name);
+        num_children++;
+        free(child);
+    }
     
     /*
     char *part = "root/";
