@@ -387,7 +387,6 @@ int fs_open(char *absolute_path, char *mode) {
     for (int i = 0; i < number_of_dirs-1; i++) {
         
         temp = strtok(NULL, "/");
-        printf("temp = %s\n", temp);
         strcat(parent_path, temp);
         strcat(parent_path, "/");
     }
@@ -400,12 +399,10 @@ int fs_open(char *absolute_path, char *mode) {
     uint16_t cluster;
     if (is_present == 0) {
        
-        printf("We are here 7\n");
         /* root directory */
         strcpy(absolute_path_array, absolute_path);
         
         part_of_path = strtok(absolute_path_array, "/");
-        printf("We are here 7\n");
         
         
         myMBR = getMBR();
@@ -414,7 +411,6 @@ int fs_open(char *absolute_path, char *mode) {
         /* root entry */
         int cluster_num = 0;
         entry_t entry = get_entry_from_cluster(cluster_num);
-        printf("We are here 8\n");
         
         /* Get parent cluster */
         int current_dir_num = 0;
@@ -422,14 +418,11 @@ int fs_open(char *absolute_path, char *mode) {
         /** 
          ERROR BELOW HERE SOMEWHERE
          */
-        
         while (current_dir_num < number_of_dirs) {
             
             part_of_path = strtok(NULL, "/");
-            printf("We are here 7\n");
             int number_of_children = entry.numChildren;
             int child_num = 0;
-            
             /* Iterate through all the children to find appropriate directory */
             while(child_num < number_of_children) {
                 entry_ptr_t child_ptr = get_children_data_from_cluster(cluster_num, child_num);
@@ -453,10 +446,12 @@ int fs_open(char *absolute_path, char *mode) {
         entry_t *new_entry = (entry_t *) malloc(sizeof(entry_t));
         
         /* Create new entry */
+        strcpy(absolute_path_array, absolute_path);
         char *f_name;
         int i = 0;
         while (i < number_of_dirs + 1) {
-            f_name = strtok(absolute_path, "/");
+            f_name = strtok(absolute_path_array, "/");
+            i++;
         }
         strcpy(new_entry->name,f_name);
         new_entry->name_len = sizeof(f_name);
@@ -469,7 +464,7 @@ int fs_open(char *absolute_path, char *mode) {
         entry_ptr_t *child_entry = (entry_ptr_t *)malloc(sizeof(entry_ptr_t));
         child_entry->type = 0;
         child_entry->start = cluster;
-        
+        //
         /* Write child to bin file */
         fseek(my_file, cluster_local_bytes, SEEK_SET);
         fwrite(&new_entry, sizeof(cluster_sz_bytes), 1, my_file);
