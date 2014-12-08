@@ -360,7 +360,10 @@ int fs_open(char *absolute_path, char *mode) {
     int is_present = 0;
     
     /* Check if the file exists */
-    if (access( absolute_path, F_OK ) != -1) { is_present = 1; }
+    //printf("access %d on path: %s \n", access( absolute_path, F_OK ), absolute_path);
+    if (access( absolute_path, F_OK ) == 0) {
+        is_present = 1;
+    }
     
     /* Find number of subdirectories */
     char absolute_path_array[strlen(absolute_path)];
@@ -375,21 +378,25 @@ int fs_open(char *absolute_path, char *mode) {
     }
     
     /* Check if parent path exists */
-    char *parent_path = (char *) malloc (sizeof(absolute_path));
+    char *parent_path = (char *) malloc (sizeof(absolute_path)+1);
     strcpy(absolute_path_array, absolute_path);
     
     number_of_dirs--;
     
-    char *temp;     /* used for inidividual directory names */
+    //char *temp;     /* used for inidividual directory names */
     /* Get the parent path */
-    parent_path = strtok(absolute_path_array, "/");
+    //parent_path =
+    
+    char *temp = strtok(absolute_path_array, "/");
+    strcat(parent_path, temp);
     strcat(parent_path, "/");
 
+    
     for (int i = 0; i < number_of_dirs-1; i++) {
-        
-        temp = strtok(NULL, "/");
+        char *temp = strtok(NULL, "/");
         strcat(parent_path, temp);
         strcat(parent_path, "/");
+        
     }
     /* Parent path doesn't exist, return error */
     if (access( parent_path, F_OK ) == -1) {
@@ -400,6 +407,7 @@ int fs_open(char *absolute_path, char *mode) {
     uint16_t cluster;
     if (is_present == 0) {
        
+        printf("can we make it here??? \n");
         /* root directory */
         strcpy(absolute_path_array, absolute_path);
         
@@ -454,6 +462,7 @@ int fs_open(char *absolute_path, char *mode) {
             f_name = strtok(absolute_path_array, "/");
             i++;
         }
+        printf("asdfasdfad\n");
         strcpy(new_entry->name,f_name);
         new_entry->name_len = sizeof(f_name);
         new_entry->entry_type = 0;
@@ -475,6 +484,13 @@ int fs_open(char *absolute_path, char *mode) {
         //write_full(&child_entry)
         fwrite(&child_entry, sizeof(entry_ptr_t), 1, my_file);
         
+        /* Update parent directory (numChildren++) */
+        entry_t pd = get_entry_from_cluster(cluster_num);
+        pd.numChildren = pd.numChildren + 1;
+        int parent_local = (cluster_num + myMBR->data_start) * cluster_sz_bytes;
+        fseek(my_file, parent_local, SEEK_SET);
+        printf("ftell = %ld\n", ftell(my_file));
+        fwrite(&pd, 1, sizeof(entry_t), my_file);
     }
     
     /* Parent path exists... create file */
@@ -969,8 +985,21 @@ int main(int argc, const char * argv[]) {
         printf("child name = %s\n", child->name);
         num_children++;
         //free(child);
-    }*/
+    } */
+    
     int result = fs_open("root/my_file.txt", "w");
+    int result2 = fs_open("root/dylans3/do.txt", "w");
+    
+    entry_t root_dir = get_entry_from_cluster(dh);
+    
+    /* CAN"T PRINT FILE FOR SOME REASON */
+    int num_children = 0;
+    while (num_children < root_dir.numChildren) {
+        entry_t *child = fs_ls(0, num_children);
+        printf("child name = %s\n", child->name);
+        num_children++;
+        //free(child);
+    }
     
     return 0;
 }

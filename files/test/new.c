@@ -3,7 +3,7 @@
 #include <string.h>
 
 int main() {
-	char path[20] = "root/dylans_folder/";
+	char *path = "root/dylans_folder/something.txt";
 	printf("path = %s\n", path);
 	
 	char *part = strtok(path, "/");
