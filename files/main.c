@@ -198,6 +198,7 @@ int fs_opendir(char *absolute_path) {
 
         uint16_t *myFAT = fat;
         
+        strcpy(part_array, absolute_path);
         part = strtok(part_array, "/");
         /* Iterate through FAT until empty or found */
         uint16_t cluster_num = myFAT[num];
@@ -249,7 +250,7 @@ int fs_opendir(char *absolute_path) {
         new_item->isDirectory = 1;
         strcpy(new_item->path, absolute_path);
         
-        free(part);
+        //free(part);
         fclose(my_file);
         return cluster_num;
     }
@@ -954,6 +955,12 @@ int main(int argc, const char * argv[]) {
     fs_mkdir(dh, "dylans_folder");
     fs_mkdir(dh, "dylans_folder2");
     fs_mkdir(dh, "dylans3");
+    
+    int dh2 = fs_opendir("root/dylans_folder/");
+    printf("dh2 = %d\n", dh2);
+    
+    int dh3 = fs_opendir("root/dylans3/");
+    printf("dh3 = %d\n", dh3);
     
     /*
     int num_children = 0;
