@@ -78,6 +78,21 @@ uint16_t total_entries;
 
 
 void format(uint16_t sector_sz, uint16_t cluster_sz, uint16_t disk_sz) {
+    /* Check if sector size is large enough */
+    if (sector_sz < 64) {
+        perror("sector size is too small, must be >= 64");
+        exit(0);
+    }
+    
+    if (cluster_sz < 1) {
+        perror("cluster size must be at least 1");
+        exit(0);
+    }
+    
+    if (disk_sz < 1) {
+        perror("disk size must be at least 1 cluster");
+    }
+    
     //file_name = "disk";
     cluster_sz_bytes = cluster_sz * sector_sz;
     /* Most difficult to implement */
