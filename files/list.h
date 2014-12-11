@@ -69,7 +69,7 @@ typedef struct list_item {
 
 /**
 global variable declaration
-**/
+*/
 typedef struct single_list {
 	list_item_t *head;
 	list_item_t *tail;

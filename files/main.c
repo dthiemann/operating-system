@@ -39,6 +39,7 @@ entry_t get_entry_from_cluster(uint16_t cluster);
 int find_open_child_slot_for_cluster(int directory_handler);
 uint16_t clusterToBytes(mbr_t *myMBR, uint16_t address);
 entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child);
+void get_entry_from_cluster_ptr(uint16_t cluster, entry_t *my_entry);
 
 mbr_t * getMBR();
 uint16_t * getFAT();
@@ -195,7 +196,7 @@ int fs_opendir(char *absolute_path) {
         int count = 0;      /* for path */
         
         //my_file = fopen(file_name, "rb+");
-
+        
         uint16_t *myFAT = fat;
         
         strcpy(part_array, absolute_path);
@@ -266,11 +267,11 @@ void fs_mkdir(int dh, char *child_name) {
     my_file = fopen(file_name, "rb+");
     
     mbr_t *mbr = myMBR;
-
+    
     //FILE *my_file = fopen(file_name, "wb+");
     entry_t parent_dir = get_entry_from_cluster(dh);
     int child_location = find_open_child_slot_for_cluster(dh);
-
+    
     int child_cluster = get_available_cluster(mbr->fat_len);
     int child_cluster_local = (child_cluster + myMBR->data_start) * cluster_sz_bytes;
     
@@ -361,7 +362,7 @@ int fs_open(char *absolute_path, char *mode) {
     
     /* Check if the file exists */
     //printf("access %d on path: %s \n", access( absolute_path, F_OK ), absolute_path);
-    if (access( absolute_path, F_OK ) == 0) {
+    if (access( absolute_path, F_OK ) == 1) {
         is_present = 1;
     }
     
@@ -390,7 +391,7 @@ int fs_open(char *absolute_path, char *mode) {
     char *temp = strtok(absolute_path_array, "/");
     strcat(parent_path, temp);
     strcat(parent_path, "/");
-
+    
     
     for (int i = 0; i < number_of_dirs-1; i++) {
         char *temp = strtok(NULL, "/");
@@ -406,39 +407,39 @@ int fs_open(char *absolute_path, char *mode) {
     /* Add file to a cluster and write to disk if it doesn't exist */
     uint16_t cluster;
     if (is_present == 0) {
-       
-        printf("can we make it here??? \n");
-        /* root directory */
-        strcpy(absolute_path_array, absolute_path);
-        
-        part_of_path = strtok(absolute_path_array, "/");
-        
-        
+    
         myMBR = getMBR();
         fat = getFAT();
         
         /* root entry */
         int cluster_num = 0;
-        entry_t entry = get_entry_from_cluster(cluster_num);
+        //entry_t entry = get_entry_from_cluster(cluster_num);
+        entry_t *child = (entry_t *)malloc(sizeof(entry_t));
+        entry_t *entry = (entry_t *)malloc(sizeof(entry_t));
+        get_entry_from_cluster_ptr(cluster_num, entry);
         
         /* Get parent cluster */
         int current_dir_num = 0;
         
-        /** 
+        /**
          ERROR BELOW HERE SOMEWHERE
          */
+        
+        /* root directory */
+        strcpy(absolute_path_array, absolute_path);
+        part_of_path = strtok(absolute_path_array, "/");
         while (current_dir_num < number_of_dirs) {
-            
-            part_of_path = strtok(NULL, "/");
-            int number_of_children = entry.numChildren;
+        
+            int number_of_children = entry->numChildren;
+            printf("number of children %d\n", number_of_children);
             int child_num = 0;
             /* Iterate through all the children to find appropriate directory */
             while(child_num < number_of_children) {
                 entry_ptr_t child_ptr = get_children_data_from_cluster(cluster_num, child_num);
-                entry_t child = get_entry_from_cluster(child_ptr.start);
+                 get_entry_from_cluster_ptr(child_ptr.start, child);
                 
                 /* if child is next in path traverse through this directory */
-                if (strcmp(part_of_path, child.name) == 0 && child.entry_type == 1) {
+                if (strcmp(part_of_path, child->name) == 0 && child->entry_type == 1) {
                     cluster_num = child_ptr.start;
                     entry = child;
                     break;
@@ -446,6 +447,7 @@ int fs_open(char *absolute_path, char *mode) {
                 child_num++;
             }
             current_dir_num++;
+            part_of_path = strtok(NULL, "/");
         }
         
         /* Have cluster of parent directory, need to add child */
@@ -506,7 +508,7 @@ int fs_open(char *absolute_path, char *mode) {
     
     /* Add file to open files data structures */
     add(open_files, &new_open_file);
-
+    
     return new_open_file.value;
 }
 
@@ -717,7 +719,7 @@ uint16_t * getFAT() {
     
     fseek(my_file, num, SEEK_SET);
     uint16_t *myFat;
-
+    
     fread(&myFat, myMBR->fat_len * myMBR->cluster_sz * myMBR->sector_sz, 1, my_file);
     //fclose(my_file);
     return fat;
@@ -742,17 +744,16 @@ entry_t get_entry_from_cluster(uint16_t cluster) {
     //FILE *f = my_file;
     uint16_t *myFAT = fat;
     
-
     entry_t my_entry;
     /* Nothing exists at that cluster */
     if (myFAT[cluster] == 0xFFFF) {
         return my_entry;
     }
     
-
+    
     /* Find where the data starts */
     uint16_t cluster_start = data_start_in_bytes + cluster_sz_bytes * cluster;
-
+    
     //printf("where to read %d %ld\n", cluster_start, ftell(my_file));
     
     fseek(my_file, cluster_start, SEEK_SET);
@@ -763,6 +764,29 @@ entry_t get_entry_from_cluster(uint16_t cluster) {
     return my_entry;
     
 }
+
+/* Get an entry from a cluster number */
+void get_entry_from_cluster_ptr(uint16_t cluster, entry_t *my_entry) {
+    //FILE *f = my_file;
+    uint16_t *myFAT = fat;
+    
+    /* Nothing exists at that cluster */
+    if (myFAT[cluster] == 0xFFFF) {
+        exit(0);
+    }
+    
+    
+    /* Find where the data starts */
+    uint16_t cluster_start = data_start_in_bytes + cluster_sz_bytes * cluster;
+    
+    //printf("where to read %d %ld\n", cluster_start, ftell(my_file));
+    
+    fseek(my_file, cluster_start, SEEK_SET);
+    printf("ftell %ld\n", ftell(my_file));
+    int value = fread(my_entry, 1, sizeof(entry_t), my_file);
+    //read_full_entry(my_entry, sizeof(entry_t), my_file);
+}
+
 
 /* Get a specific child of a directory */
 entry_ptr_t get_children_data_from_cluster(uint16_t cluster, int num_child) {
@@ -804,16 +828,16 @@ int find_open_child_slot_for_cluster(int directory_handler) {
     //int child_count = 0;
     
     /*
-    while (current_seek < cluster_size_in_bytes) {
-        entry_ptr_t temp = get_children_data_from_cluster(directory_handler, child_count);
-        
-        if (&temp == NULL) {
-            return dir_local + current_seek;
-        } else {
-            current_seek = current_seek + sizeof(entry_ptr_t);
-            fseek(my_file, dir_local + current_seek, SEEK_SET);
-        }
-    } */
+     while (current_seek < cluster_size_in_bytes) {
+     entry_ptr_t temp = get_children_data_from_cluster(directory_handler, child_count);
+     
+     if (&temp == NULL) {
+     return dir_local + current_seek;
+     } else {
+     current_seek = current_seek + sizeof(entry_ptr_t);
+     fseek(my_file, dir_local + current_seek, SEEK_SET);
+     }
+     } */
     return dir_local + sizeof(entry_t) + sizeof(entry_ptr_t)*number_of_children;
 }
 
@@ -978,28 +1002,17 @@ int main(int argc, const char * argv[]) {
     int dh3 = fs_opendir("root/dylans3/");
     printf("dh3 = %d\n", dh3);
     
-    /*
-    int num_children = 0;
-    while (num_children < 3) {
-        entry_t *child = fs_ls(0, num_children);
-        printf("child name = %s\n", child->name);
-        num_children++;
-        //free(child);
-    } */
-    
     int result = fs_open("root/my_file.txt", "w");
     int result2 = fs_open("root/dylans3/do.txt", "w");
     
-    entry_t root_dir = get_entry_from_cluster(dh);
-    
-    /* CAN"T PRINT FILE FOR SOME REASON */
     int num_children = 0;
-    while (num_children < root_dir.numChildren) {
-        entry_t *child = fs_ls(0, num_children);
-        printf("child name = %s\n", child->name);
-        num_children++;
-        //free(child);
+    while (num_children < 4) {
+    entry_t *child = fs_ls(0, num_children);
+    printf("child name = %s\n", child->name);
+    num_children++;
+    //free(child);
     }
-    
+
+
     return 0;
 }
